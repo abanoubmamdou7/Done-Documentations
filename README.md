@@ -8,10 +8,11 @@ This folder contains all Postman API documentation files organized by module.
 
 - **[admin.md](./admin.md)** - Admin endpoints for user management, content moderation, and analytics
 - **[auth.md](./auth.md)** - Authentication and FCM token integration (login, logout, settings)
-- **[profiles.md](./profiles.md)** - User profile management APIs
+- **[collections.md](./collections.md)** - Collections API documentation
 - **[notifications.md](./notifications.md)** - Notifications system with Firebase Cloud Messaging
 - **[products.md](./products.md)** - Products API documentation
 - **[products-quick-reference.md](./products-quick-reference.md)** - Quick reference for Products API
+- **[profiles.md](./profiles.md)** - User profile management APIs
 
 ### Social Module
 
