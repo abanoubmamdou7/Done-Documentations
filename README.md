@@ -74,5 +74,3 @@ This will:
 - For route definitions, see `src/modules/*/router.js` files
 - For validation schemas, see `src/modules/*/controller/*.validation.js` files
 - For script documentation, see `scripts/README.md`
-
-# Done-Documentations
