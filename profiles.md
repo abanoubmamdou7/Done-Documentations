@@ -56,6 +56,7 @@ Authorization: <token>
       "role": "USER",
       "status": "Active",
       "isActive": true,
+      "haveActiveStories": true,
       "createdAt": "2024-01-01T00:00:00.000Z",
       "updatedAt": "2024-01-01T00:00:00.000Z",
       "stats": {
@@ -117,6 +118,7 @@ GET http://localhost:3000/api/profile/550e8400-e29b-41d4-a716-446655440000
       "bio": "Fashion enthusiast | Love sharing my style with the world ✨",
       "role": "USER",
       "status": "Active",
+      "haveActiveStories": true,
       "createdAt": "2024-01-01T00:00:00.000Z",
       "updatedAt": "2024-01-01T00:00:00.000Z",
       "stats": {
@@ -132,6 +134,15 @@ GET http://localhost:3000/api/profile/550e8400-e29b-41d4-a716-446655440000
   }
 }
 ```
+
+**Response Fields:**
+- `haveActiveStories`: Boolean indicating if the profile has active (non-expired) stories. Returns `true` if the profile has at least one story that hasn't expired, `false` otherwise. Useful for displaying story indicators in the UI.
+
+**Error Responses:**
+- `400` - Invalid profile ID format
+- `401` - Unauthorized
+- `403` - Profile is not active
+- `404` - Profile not found
 
 ---
 
@@ -673,11 +684,11 @@ Authorization: <token>
 ### 15. Get Posts by Profile ID
 **GET** `/api/posts/profile/:profileId`
 
-**Description:** Get all posts created by a specific profile (for profile page "All Posts" section)
+**Description:** Get all posts created by a specific user or seller profile. This endpoint respects post visibility settings and shows only posts that the current user has permission to view.
 
 **URL Parameters:**
 ```
-profileId: string (required) - UUID of the profile
+profileId: string (required) - UUID of the profile (USER or SELLER)
 ```
 
 **Query Parameters:**
@@ -691,9 +702,22 @@ size: string (optional, default: "25") - Items per page
 Authorization: <token>
 ```
 
-**Example Request:**
+**Visibility Rules:**
+- **Own Profile:** Shows all posts (PUBLIC and FOLLOWERS-only)
+- **Other Profiles:**
+  - Shows **PUBLIC** posts to everyone
+  - Shows **FOLLOWERS-only** posts only if:
+    - You follow the profile, OR
+    - You are friends with the profile
+
+**Example Request (Original Posts Only):**
 ```
-GET http://localhost:3000/api/posts/profile/550e8400-e29b-41d4-a716-446655440000?page=1&size=25
+GET http://localhost:3000/api/posts/profile/4afd7a15-1f48-40fe-86f8-58ba012ebba6?page=1&size=25
+```
+
+**Example Request (Include Reposts):**
+```
+GET http://localhost:3000/api/posts/profile/4afd7a15-1f48-40fe-86f8-58ba012ebba6?page=1&size=25&includeReposts=true
 ```
 
 **Response:**
@@ -702,38 +726,72 @@ GET http://localhost:3000/api/posts/profile/550e8400-e29b-41d4-a716-446655440000
   "success": true,
   "page": 1,
   "size": 25,
-  "total": 42,
+  "total": 10,
   "data": [
     {
-      "id": "880e8400-e29b-41d4-a716-446655440003",
-      "type": "FEED",
-      "caption": "Check out my new style!",
-      "mediaUrl": "https://cloudinary.com/post-image.jpg",
-      "createdAt": "2024-01-15T10:30:00.000Z",
-      "updatedAt": "2024-01-15T10:30:00.000Z",
+      "id": "f5674766-bb0c-4ccf-bfa3-6c6f4b57b5de",
+      "type": "REEL",
+      "caption": "Beautiful sunset today! #sunset #nature",
+      "mediaUrl": "https://res.cloudinary.com/...",
+      "visibility": "PUBLIC",
+      "createdAt": "2025-12-14T18:34:22.562Z",
+      "updatedAt": "2025-12-14T18:34:22.562Z",
       "author": {
-        "id": "550e8400-e29b-41d4-a716-446655440000",
-        "displayName": "John Doe",
-        "avatarUrl": "https://cloudinary.com/avatar.jpg",
+        "id": "4afd7a15-1f48-40fe-86f8-58ba012ebba6",
+        "displayName": "Abanoub Youssef 2",
+        "avatarUrl": "https://res.cloudinary.com/...",
         "role": "USER"
       },
       "counts": {
-        "likes": 150,
-        "comments": 25,
-        "shares": 10
+        "likes": 1,
+        "comments": 3,
+        "shares": 0
       },
-      "likedByCurrentUser": true,
+      "likedByCurrentUser": false,
       "isMine": false,
-      "isFollow": true,
-      "repostedByCurrentUser": false
+      "isFollow": false,
+      "isFriend": true,
+      "repostedByCurrentUser": false,
+      "isRepostedByMine": false,
+      "isSaved": false
     }
   ]
 }
 ```
 
+**Response Fields:**
+- `visibility`: Post visibility setting (`PUBLIC` or `FOLLOWERS`)
+- `isFriend`: Whether current user is friends with the profile (checks both friendships table and accepted friend requests for accuracy)
+- `isSaved`: Whether current user has saved/bookmarked this post
+- `isRepostedByMine`: Whether current user has reposted this post
+- `isRepost`: Boolean indicating if this is a repost (only present when `includeReposts=true`)
+- `repostInfo`: Object with repost details (only present for reposts):
+  - `repostedAt`: When the post was reposted
+  - `repostCaption`: Optional caption added when reposting
+  - `repostedBy`: Profile info of who reposted it
+- All other standard post fields (counts, likedByCurrentUser, isMine, isFollow, etc.)
+
+**When `includeReposts=true`:**
+- Response includes both original posts and reposts
+- Posts and reposts are sorted together by creation date (most recent first)
+- Reposts show the original post content with `isRepost: true` and `repostInfo`
+- The `author` field in reposts refers to the original post author
+- The `createdAt` field in reposts refers to when it was reposted (for sorting)
+
 **Error Responses:**
+- `400`: Bad Request (invalid profile ID format)
+- `401`: Unauthorized
 - `404`: "Profile not found"
 - `403`: "Profile is not active"
+
+**Notes:**
+- Works for both USER and SELLER profiles
+- **Default behavior:** Shows only original posts created by the profile
+- **With `includeReposts=true`:** Shows both original posts and reposts mixed together
+- Posts are sorted by creation date (most recent first)
+- Reposts respect the same visibility rules as original posts
+- Only shows posts the current user has permission to view based on visibility settings
+- Friend detection checks both the `friendships` table and accepted `friendRequest` records for accuracy
 
 ---
 

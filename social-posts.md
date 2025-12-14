@@ -453,6 +453,117 @@ Authorization: {{token}}
 
 ---
 
+## GET POSTS BY PROFILE
+
+### 6. Get Posts by Profile ID
+
+Get all posts created by a specific user or seller profile.
+
+**Endpoint:** `GET /api/posts/profile/:profileId`
+
+**Headers:**
+```
+Authorization: <token>
+```
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `profileId` | UUID | Yes | Profile ID of the user or seller |
+
+**Query Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `page` | String | No | Page number (default: 1) |
+| `size` | String | No | Items per page (default: 25) |
+| `includeReposts` | String | No | Set to `"true"` to include reposts mixed with original posts |
+
+**Visibility Rules:**
+- **Own Profile:** Shows all posts (PUBLIC and FOLLOWERS-only)
+- **Other Profiles:**
+  - Shows **PUBLIC** posts to everyone
+  - Shows **FOLLOWERS-only** posts only if you follow them or are friends
+
+**Example Request (Original Posts Only):**
+```
+GET /api/posts/profile/4afd7a15-1f48-40fe-86f8-58ba012ebba6?page=1&size=25
+```
+
+**Example Request (Include Reposts):**
+```
+GET /api/posts/profile/4afd7a15-1f48-40fe-86f8-58ba012ebba6?page=1&size=25&includeReposts=true
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "page": 1,
+  "size": 25,
+  "total": 10,
+  "data": [
+    {
+      "id": "f5674766-bb0c-4ccf-bfa3-6c6f4b57b5de",
+      "type": "REEL",
+      "caption": "Beautiful sunset today! #sunset",
+      "mediaUrl": "https://res.cloudinary.com/...",
+      "visibility": "PUBLIC",
+      "createdAt": "2025-12-14T18:34:22.562Z",
+      "updatedAt": "2025-12-14T18:34:22.562Z",
+      "author": {
+        "id": "4afd7a15-1f48-40fe-86f8-58ba012ebba6",
+        "displayName": "Abanoub Youssef 2",
+        "avatarUrl": "https://...",
+        "role": "USER"
+      },
+      "counts": {
+        "likes": 1,
+        "comments": 3,
+        "shares": 0
+      },
+      "likedByCurrentUser": false,
+      "isMine": false,
+      "isFollow": false,
+      "isFriend": true,
+      "repostedByCurrentUser": false,
+      "isRepostedByMine": false,
+      "isSaved": false
+    }
+  ]
+}
+```
+
+**Error Responses:**
+- `400` - Invalid profile ID format
+- `401` - Unauthorized
+- `404` - Profile not found
+- `403` - Profile is not active
+
+**Notes:**
+- Works for both USER and SELLER profiles
+- **Default:** Shows only original posts created by the profile
+- **With `includeReposts=true`:** Shows both original posts and reposts mixed together
+- Reposts include `isRepost: true` and `repostInfo` object with repost details
+- Respects post visibility settings (PUBLIC vs FOLLOWERS) for both posts and reposts
+- Friend detection checks both friendships table and accepted friend requests
+- All items sorted by creation date (most recent first)
+
+**Postman Examples:**
+
+Original Posts Only:
+```
+GET {{baseUrl}}/api/posts/profile/4afd7a15-1f48-40fe-86f8-58ba012ebba6?page=1&size=25
+Authorization: {{token}}
+```
+
+Include Reposts:
+```
+GET {{baseUrl}}/api/posts/profile/4afd7a15-1f48-40fe-86f8-58ba012ebba6?page=1&size=25&includeReposts=true
+Authorization: {{token}}
+```
+
+---
+
 ## Best Practices
 
 1. **Search Posts:**

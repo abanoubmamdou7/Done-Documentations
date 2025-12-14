@@ -248,7 +248,7 @@ When creating a post, you can now specify visibility:
 
 **Visibility Options:**
 - `PUBLIC`: Visible to everyone (default)
-- `FOLLOWERS`: Only visible to followers
+- `FOLLOWERS`: Only visible to followers and friends
 
 ### Update Post Visibility
 
@@ -265,6 +265,45 @@ When creating a post, you can now specify visibility:
 **Note:** The feed endpoint (`GET /api/posts/feed`) now respects visibility settings:
 - Shows PUBLIC posts to everyone
 - Shows FOLLOWERS-only posts only to users who follow the author
+
+### Get Posts by Profile
+
+**Endpoint:** `GET /api/posts/profile/:profileId`
+
+Get all posts by a specific user or seller, respecting visibility settings.
+
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `size` (optional): Items per page (default: 25)
+- `includeReposts` (optional): Set to `"true"` to include reposts mixed with original posts
+
+**Visibility Rules:**
+- **Own Profile:** Shows all posts (PUBLIC and FOLLOWERS-only)
+- **Other Profiles:**
+  - Shows **PUBLIC** posts to everyone
+  - Shows **FOLLOWERS-only** posts only if you follow them or are friends
+
+**Examples:**
+
+Original Posts Only:
+```
+GET {{base_url}}/api/posts/profile/4afd7a15-1f48-40fe-86f8-58ba012ebba6?page=1&size=25
+Authorization: Bearer {{auth_token}}
+```
+
+Include Reposts:
+```
+GET {{base_url}}/api/posts/profile/4afd7a15-1f48-40fe-86f8-58ba012ebba6?page=1&size=25&includeReposts=true
+Authorization: Bearer {{auth_token}}
+```
+
+**Response includes:**
+- `visibility`: Post visibility setting
+- `isFriend`: Accurate friend detection (checks both friendships and accepted requests)
+- `isSaved`: Whether post is bookmarked
+- `isRepostedByMine`: Whether post is reposted
+- `isRepost`: Boolean indicating if item is a repost (when `includeReposts=true`)
+- `repostInfo`: Repost details (repostedAt, repostCaption, repostedBy) for reposted items
 
 ---
 

@@ -173,7 +173,142 @@ Authorization: <token>
 
 ---
 
-## 4. Get Story by ID
+## 4. Get Stories by Profile ID
+
+Get all stories created by a specific profile. By default, only active (non-expired) stories are returned.
+
+**Endpoint:** `GET /api/stories/profile/:profileId`
+
+**Headers:**
+```
+Authorization: <token>
+```
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| profileId | UUID | Yes | Profile ID of the user |
+
+**Query Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| includeExpired | String | No | Set to `"true"` to include expired stories (default: `"false"`) |
+
+**Example Request (Active Stories Only):**
+```
+GET /api/stories/profile/4afd7a15-1f48-40fe-86f8-58ba012ebba6
+```
+
+**Example Request (Include Expired):**
+```
+GET /api/stories/profile/4afd7a15-1f48-40fe-86f8-58ba012ebba6?includeExpired=true
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "count": 3,
+  "includeExpired": false,
+  "author": {
+    "id": "4afd7a15-1f48-40fe-86f8-58ba012ebba6",
+    "displayName": "John Doe",
+    "avatarUrl": "https://res.cloudinary.com/...",
+    "role": "USER"
+  },
+  "data": [
+    {
+      "id": "1234567890",
+      "mediaUrl": "https://res.cloudinary.com/...",
+      "caption": "Story caption",
+      "expiresAt": "2024-01-02T12:00:00.000Z",
+      "createdAt": "2024-01-01T12:00:00.000Z",
+      "counts": {
+        "views": 15,
+        "likes": 5
+      },
+      "isViewed": false,
+      "isLiked": true,
+      "isExpired": false
+    },
+    {
+      "id": "1234567891",
+      "mediaUrl": "https://res.cloudinary.com/...",
+      "caption": "Another story",
+      "expiresAt": "2024-01-02T14:00:00.000Z",
+      "createdAt": "2024-01-01T14:00:00.000Z",
+      "counts": {
+        "views": 8,
+        "likes": 2
+      },
+      "isViewed": true,
+      "isLiked": false,
+      "isExpired": false
+    }
+  ]
+}
+```
+
+**Response with Expired Stories (`includeExpired=true`):**
+```json
+{
+  "success": true,
+  "count": 5,
+  "includeExpired": true,
+  "author": {
+    "id": "4afd7a15-1f48-40fe-86f8-58ba012ebba6",
+    "displayName": "John Doe",
+    "avatarUrl": "https://res.cloudinary.com/...",
+    "role": "USER"
+  },
+  "data": [
+    {
+      "id": "1234567890",
+      "mediaUrl": "https://res.cloudinary.com/...",
+      "caption": "Active story",
+      "expiresAt": "2024-01-02T12:00:00.000Z",
+      "createdAt": "2024-01-01T12:00:00.000Z",
+      "counts": {
+        "views": 15,
+        "likes": 5
+      },
+      "isViewed": false,
+      "isLiked": true,
+      "isExpired": false
+    },
+    {
+      "id": "1234567889",
+      "mediaUrl": "https://res.cloudinary.com/...",
+      "caption": "Expired story",
+      "expiresAt": "2023-12-31T12:00:00.000Z",
+      "createdAt": "2023-12-30T12:00:00.000Z",
+      "counts": {
+        "views": 20,
+        "likes": 8
+      },
+      "isViewed": true,
+      "isLiked": false,
+      "isExpired": true
+    }
+  ]
+}
+```
+
+**Error Responses:**
+- `400` - Invalid profile ID format
+- `401` - Unauthorized
+- `403` - Profile is not active
+- `404` - Profile not found
+
+**Notes:**
+- By default, only active (non-expired) stories are returned
+- Stories are sorted by creation date (most recent first)
+- The `isViewed` and `isLiked` fields indicate the current user's interaction with each story
+- The `isExpired` field indicates whether the story has expired (useful when `includeExpired=true`)
+
+---
+
+## 5. Get Story by ID
 
 Get a specific story by its ID.
 
@@ -223,7 +358,7 @@ Authorization: <token>
 
 ---
 
-## 5. View Story (Mark as Viewed)
+## 6. View Story (Mark as Viewed)
 
 Mark a story as viewed by the current user.
 
@@ -269,7 +404,7 @@ Authorization: <token>
 
 ---
 
-## 6. Like/Unlike Story
+## 7. Like/Unlike Story
 
 Toggle like status for a story.
 
@@ -304,7 +439,7 @@ Authorization: <token>
 
 ---
 
-## 7. Delete Story
+## 8. Delete Story
 
 Delete a story (only the author can delete their own story).
 
@@ -368,6 +503,18 @@ caption: "Check out my new story!"
 ### Get Active Stories
 ```
 GET {{baseUrl}}/api/stories/active?page=1&size=25
+Authorization: {{token}}
+```
+
+### Get Stories by Profile ID
+```
+GET {{baseUrl}}/api/stories/profile/4afd7a15-1f48-40fe-86f8-58ba012ebba6
+Authorization: {{token}}
+```
+
+### Get Stories by Profile ID (Include Expired)
+```
+GET {{baseUrl}}/api/stories/profile/4afd7a15-1f48-40fe-86f8-58ba012ebba6?includeExpired=true
 Authorization: {{token}}
 ```
 
