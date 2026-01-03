@@ -8,6 +8,7 @@ This folder contains all Postman API documentation files organized by module.
 
 - **[admin.md](./admin.md)** - Admin endpoints for user management, content moderation, and analytics
 - **[auth.md](./auth.md)** - Authentication and FCM token integration (login, logout, settings)
+- **[chat.md](./chat.md)** - Real-time chat system with Socket.io (conversations, messages, typing indicators)
 - **[collections.md](./collections.md)** - Collections API documentation
 - **[notifications.md](./notifications.md)** - Notifications system with Firebase Cloud Messaging
 - **[products.md](./products.md)** - Products API documentation
@@ -32,8 +33,9 @@ This folder contains all Postman API documentation files organized by module.
 
 1. **Authentication**: Start with [auth.md](./auth.md) to set up authentication
 2. **Profiles**: Check [profiles.md](./profiles.md) for user profile management
-3. **Social Features**: Explore [social-engagement.md](./social-engagement.md) for all social features
-4. **Admin Tools**: See [admin.md](./admin.md) for moderation and analytics
+3. **Chat**: See [chat.md](./chat.md) for real-time messaging between users
+4. **Social Features**: Explore [social-engagement.md](./social-engagement.md) for all social features
+5. **Admin Tools**: See [admin.md](./admin.md) for moderation and analytics
 
 ## 📝 Notes
 
