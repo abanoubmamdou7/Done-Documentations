@@ -6,6 +6,8 @@ Real-time chat functionality between users using Socket.io for instant messaging
 
 The chat system supports:
 - **Direct conversations** between two users (friends only)
+- **Group chats** with multiple participants (NEW!)
+- **Group management** with admin/member roles (NEW!)
 - **Text messages**
 - **Image messages** (uploaded to Cloudinary) with optional captions
 - **File messages** (PDF, DOC, DOCX, ZIP, RAR) with optional captions
@@ -246,7 +248,217 @@ Create a new direct conversation with another user, or get existing conversation
 - Users must be friends to create a conversation
 - If a direct conversation already exists, returns the existing one
 - Returns `200` status if conversation already exists, `201` if newly created
-- Only supports **DIRECT** conversations (one-on-one)
+- Only supports **DIRECT** conversations (for groups, use Create Group endpoint)
+
+---
+
+### Create Group Conversation (NEW)
+
+Create a new group conversation with multiple friends.
+
+**Endpoint:** `POST /api/conversations/groups`
+
+**Request Body:**
+```json
+{
+  "name": "Study Group",
+  "participantIds": ["uuid-1", "uuid-2", "uuid-3"],
+  "avatarUrl": "https://...",
+  "description": "A group for studying together"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Group created successfully",
+  "data": {
+    "id": "123",
+    "type": "GROUP",
+    "name": "Study Group",
+    "avatarUrl": "https://...",
+    "description": "A group for studying together",
+    "createdBy": "your-user-id",
+    "createdAt": "2024-01-01T00:00:00Z",
+    "participants": [
+      {
+        "profileId": "your-user-id",
+        "displayName": "Your Name",
+        "avatarUrl": "https://...",
+        "roleInChat": "admin"
+      },
+      {
+        "profileId": "uuid-1",
+        "displayName": "User 1",
+        "avatarUrl": "https://...",
+        "roleInChat": "member"
+      }
+    ]
+  }
+}
+```
+
+**Notes:**
+- Group name is **required** (1-255 characters)
+- At least **1 participant** required (besides creator)
+- All participants must be **friends** with creator
+- Creator automatically becomes **admin**
+- avatarUrl and description are **optional**
+
+---
+
+### Update Group Details (NEW)
+
+Update group name, description, or avatar (admin only).
+
+**Endpoint:** `PATCH /api/conversations/:conversationId/groups`
+
+**Request Body:**
+```json
+{
+  "name": "Updated Group Name",
+  "description": "Updated description",
+  "avatarUrl": "https://..."
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Group updated successfully",
+  "data": {
+    "id": "123",
+    "type": "GROUP",
+    "name": "Updated Group Name",
+    "avatarUrl": "https://...",
+    "description": "Updated description",
+    "participants": [...]
+  }
+}
+```
+
+**Notes:**
+- **Admin only** - only group admins can update
+- All fields are optional
+- Omitted fields remain unchanged
+- Real-time updates via Socket.io
+
+**Error Responses:**
+- `403`: If user is not an admin
+
+---
+
+### Add Participants to Group (NEW)
+
+Add new members to a group (admin only).
+
+**Endpoint:** `POST /api/conversations/:conversationId/participants`
+
+**Request Body:**
+```json
+{
+  "participantIds": ["uuid-4", "uuid-5"]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Participants added successfully",
+  "data": {
+    "id": "123",
+    "type": "GROUP",
+    "name": "Study Group",
+    "participants": [
+      {
+        "profileId": "uuid-4",
+        "displayName": "User 4",
+        "avatarUrl": "https://...",
+        "roleInChat": "member",
+        "joinedAt": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+**Notes:**
+- **Admin only** - only group admins can add members
+- New members must be **friends** with admin
+- New members added as **members** (not admin)
+- Duplicate participants are ignored
+
+**Error Responses:**
+- `403`: If user is not an admin
+- `400`: If participants are not friends
+
+---
+
+### Remove Participant from Group (NEW)
+
+Remove a member from group (admin) or leave group (self).
+
+**Endpoint:** `DELETE /api/conversations/:conversationId/participants/:participantId`
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Participant removed successfully"
+}
+```
+
+**Notes:**
+- **Admins** can remove any member
+- **Any member** can remove themselves (leave group)
+- Cannot remove **last admin** (must promote someone first)
+- If last member leaves, **group is deleted**
+
+**Special Response (Last Member):**
+```json
+{
+  "success": true,
+  "message": "Group deleted (last member left)"
+}
+```
+
+**Error Responses:**
+- `403`: If trying to remove others without admin permission
+- `400`: If trying to remove last admin
+
+---
+
+### Promote Member to Admin (NEW)
+
+Promote a group member to admin role (admin only).
+
+**Endpoint:** `PATCH /api/conversations/:conversationId/participants/:participantId/promote`
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Member promoted to admin successfully",
+  "data": {
+    "profileId": "uuid-1",
+    "displayName": "User 1",
+    "roleInChat": "admin"
+  }
+}
+```
+
+**Notes:**
+- **Admin only** - only current admins can promote
+- Promoted member gains **all admin permissions**
+- Groups can have **multiple admins**
+- Cannot demote admins (feature not implemented)
+
+**Error Responses:**
+- `403`: If user is not an admin
+- `404`: If participant not found
 
 ---
 
@@ -305,7 +517,9 @@ Get all conversations for the current user with pagination.
 **Notes:**
 - Conversations are ordered by most recent message
 - Unread counts are efficiently batched in a single query
-- Only **DIRECT** conversations are returned
+- Returns both **DIRECT** and **GROUP** conversations
+- For groups, `name` field contains the group name
+- For direct chats, `name` is null and `participant` contains the other user
 
 ---
 
@@ -349,7 +563,9 @@ Get detailed information about a specific conversation.
 
 **Notes:**
 - Only participants can access conversation details
-- Currently only supports **DIRECT** conversations
+- Works for both **DIRECT** and **GROUP** conversations
+- Group conversations include all participants with roles
+- Direct conversations show the other participant info
 
 ---
 
@@ -780,6 +996,8 @@ Remove your emoji reaction from a message.
 
 ### Testing Flow
 
+#### Direct Chat Flow
+
 1. **Create/Get Conversation:**
    ```
    POST /api/conversations
@@ -828,14 +1046,59 @@ Remove your emoji reaction from a message.
    Body: { "messageIds": ["msg-id-1", "msg-id-2"] }
    ```
 
+#### Group Chat Flow (NEW)
+
+1. **Create Group:**
+   ```
+   POST /api/conversations/groups
+   Body: {
+     "name": "Test Group",
+     "participantIds": ["uuid-1", "uuid-2"],
+     "description": "Testing group chat"
+   }
+   ```
+
+2. **Send Message to Group:**
+   ```
+   POST /api/messages/{groupId}/text
+   Body: { "content": "Hello group!" }
+   ```
+
+3. **Update Group Info (Admin):**
+   ```
+   PATCH /api/conversations/{groupId}/groups
+   Body: { "name": "Updated Group Name" }
+   ```
+
+4. **Add Member (Admin):**
+   ```
+   POST /api/conversations/{groupId}/participants
+   Body: { "participantIds": ["uuid-3"] }
+   ```
+
+5. **Promote to Admin:**
+   ```
+   PATCH /api/conversations/{groupId}/participants/{userId}/promote
+   ```
+
+6. **Remove Member (Admin):**
+   ```
+   DELETE /api/conversations/{groupId}/participants/{memberId}
+   ```
+
+7. **Leave Group:**
+   ```
+   DELETE /api/conversations/{groupId}/participants/{yourUserId}
+   ```
+
 ---
 
 ## 📝 Implementation Notes
 
 ### Conversation Types
-- **DIRECT**: One-on-one conversation between two users
-- Only **DIRECT** conversations are supported
-- Group chat features have been removed for simplicity
+- **DIRECT**: One-on-one conversation between two users (friends only)
+- **GROUP**: Multi-participant group chat with admin/member roles
+- **CO_SHOPPING**: Reserved for future co-shopping feature (not implemented)
 
 ### Message Types
 - **TEXT**: Plain text messages
@@ -937,17 +1200,70 @@ Remove your emoji reaction from a message.
 - ✅ **Optimistic UI** - Instant feedback when sending
 - ✅ **Performance Boost** - 50-70% fewer re-renders
 
-### Removed Features
-- ❌ Group chat conversion
-- ❌ Add participants to conversations
-- ❌ Group management features
+### New Group Chat Features
+- ✅ **Create Groups** - Create group chats with multiple friends
+- ✅ **Group Management** - Edit name, description, avatar (admin only)
+- ✅ **Add Members** - Invite more friends to groups (admin only)
+- ✅ **Remove Members** - Remove members or leave group
+- ✅ **Promote to Admin** - Promote trusted members to admin
+- ✅ **Role-Based Permissions** - Admin vs Member roles
+
+### Group Chat Roles
+- **Admin**: Can edit group, add/remove members, promote members
+- **Member**: Can chat, view info, and leave group
 
 ### Breaking Changes
 - None - All changes are backwards compatible
 - Existing direct conversations work as before
-- New fields (reactions, deletedAt) are optional
+- New fields (reactions, deletedAt, group fields) are optional
+- Frontend supports both direct and group chats seamlessly
 
 ---
 
-**Version:** 2.0.0  
-**Last Updated:** January 9, 2025
+## 🎯 Group Chat Quick Start
+
+### 1. Create a Group
+```bash
+POST /api/conversations/groups
+{
+  "name": "My Group",
+  "participantIds": ["uuid-1", "uuid-2"],
+  "description": "Optional description"
+}
+```
+
+### 2. Send Message to Group
+```bash
+POST /api/messages/:groupId/text
+{
+  "content": "Hello everyone!"
+}
+```
+
+### 3. Manage Group (Admin Only)
+```bash
+# Update group info
+PATCH /api/conversations/:groupId/groups
+{ "name": "New Name" }
+
+# Add members
+POST /api/conversations/:groupId/participants
+{ "participantIds": ["uuid-3"] }
+
+# Promote to admin
+PATCH /api/conversations/:groupId/participants/:userId/promote
+
+# Remove member
+DELETE /api/conversations/:groupId/participants/:userId
+```
+
+### 4. Leave Group
+```bash
+# Remove yourself
+DELETE /api/conversations/:groupId/participants/:yourUserId
+```
+
+---
+
+**Version:** 3.0.0  
+**Last Updated:** January 8, 2026
