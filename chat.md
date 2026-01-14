@@ -23,12 +23,14 @@ The chat system supports:
 
 ## 🔐 Authentication
 
-All endpoints require authentication with Bearer token:
+All endpoints require authentication with token in the authorization header:
 ```
-Authorization: Bearer <your-token>
+authorization: <your-token>
 ```
 
-Allowed roles: `USER`, `SELLER`, `MEDIATOR`
+**Note:** The backend now accepts tokens **without** the "Bearer " prefix. Simply send the token directly in the `authorization` header (lowercase).
+
+Allowed roles: `USER`, `SELLER`, `MEDIATOR`, `ADMIN`
 
 ---
 
@@ -38,7 +40,15 @@ Allowed roles: `USER`, `SELLER`, `MEDIATOR`
 
 #### 1. Connect to Socket
 ```javascript
+// For local development
 const socket = io("http://localhost:3000", {
+  query: {
+    userId: "your-user-id-uuid"
+  }
+});
+
+// For production
+const socket = io("https://done-buddy-production.up.railway.app", {
   query: {
     userId: "your-user-id-uuid"
   }
@@ -957,13 +967,23 @@ Remove your emoji reaction from a message.
 
 1. **Authentication:**
    - Get token from login endpoint: `POST /api/auth/login`
-   - Set as header: `Authorization: Bearer <token>`
+   - Set as header: `authorization: <token>` (lowercase, no "Bearer " prefix)
+   - Example: `authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
 
-2. **Socket.io Connection (JavaScript):**
+2. **Base URLs:**
+   - **Local Development:** `http://localhost:3000`
+   - **Production:** `https://done-buddy-production.up.railway.app`
+
+3. **Socket.io Connection (JavaScript):**
    ```javascript
    import io from "socket.io-client";
    
-   const socket = io("http://localhost:3000", {
+   // Use environment-specific URL
+   const SOCKET_URL = process.env.NODE_ENV === 'production' 
+     ? "https://done-buddy-production.up.railway.app"
+     : "http://localhost:3000";
+   
+   const socket = io(SOCKET_URL, {
      query: { userId: "your-user-id" }
    });
    
@@ -1265,5 +1285,74 @@ DELETE /api/conversations/:groupId/participants/:yourUserId
 
 ---
 
-**Version:** 3.0.0  
-**Last Updated:** January 8, 2026
+## 🌐 Production Deployment
+
+### Environment Configuration
+
+The chat system is deployed on **Railway** at:
+- **Production API:** `https://done-buddy-production.up.railway.app`
+- **Socket.io:** Same URL as API (automatic upgrade)
+
+### Client Configuration
+
+**React/Vite Setup:**
+```javascript
+// config.js
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://done-buddy-production.up.railway.app';
+export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://done-buddy-production.up.railway.app';
+```
+
+**Environment Variables (.env):**
+```env
+# Production (default)
+VITE_API_URL=https://done-buddy-production.up.railway.app
+VITE_SOCKET_URL=https://done-buddy-production.up.railway.app
+
+# Local Development (override)
+# VITE_API_URL=http://localhost:3000
+# VITE_SOCKET_URL=http://localhost:3000
+```
+
+### Authentication Headers
+
+**Important:** The backend accepts tokens **without** the "Bearer " prefix:
+
+```javascript
+// ✅ Correct
+api.defaults.headers.common['authorization'] = token;
+
+// ❌ Old way (no longer required)
+api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+```
+
+### Global Error Handling
+
+Implement automatic token refresh on auth errors:
+
+```javascript
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Handle expired/invalid tokens
+    if (
+      error.response?.status === 401 ||
+      error.response?.data?.error?.name === 'JsonWebTokenError'
+    ) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.reload();
+    }
+    return Promise.reject(error);
+  }
+);
+```
+
+### CORS Configuration
+
+The backend has CORS enabled for all origins. No additional configuration needed for localhost development.
+
+---
+
+**Version:** 3.1.0  
+**Last Updated:** January 14, 2026  
+**Production URL:** https://done-buddy-production.up.railway.app
