@@ -79,7 +79,8 @@ socket.emit("typing", {
   conversationId: "123",
   userId: "your-user-id",
   isTyping: true,
-  isRecording: false
+  isRecording: false,
+  participantIds: ["user-id-1", "user-id-2"] // Optional: for chat list updates
 });
 
 // Recording indicator (voice message)
@@ -87,7 +88,8 @@ socket.emit("typing", {
   conversationId: "123",
   userId: "your-user-id",
   isTyping: false,
-  isRecording: true
+  isRecording: true,
+  participantIds: ["user-id-1", "user-id-2"] // Optional: for chat list updates
 });
 
 // Both can be sent together (edge case)
@@ -95,7 +97,8 @@ socket.emit("typing", {
   conversationId: "123",
   userId: "your-user-id",
   isTyping: true,
-  isRecording: true
+  isRecording: true,
+  participantIds: ["user-id-1", "user-id-2"] // Optional: for chat list updates
 });
 
 // Stop all indicators
@@ -103,9 +106,15 @@ socket.emit("typing", {
   conversationId: "123",
   userId: "your-user-id",
   isTyping: false,
-  isRecording: false
+  isRecording: false,
+  participantIds: ["user-id-1", "user-id-2"] // Optional: for chat list updates
 });
 ```
+
+**Note:** The `participantIds` parameter is optional but **recommended**. When provided:
+- ✅ Typing indicators appear in the **chat list** (conversation list view)
+- ✅ Users can see activity even when **outside** the conversation
+- ✅ Better UX - know which conversations have active users
 
 ### Server → Client Events
 
@@ -175,10 +184,37 @@ socket.on("typing", (data) => {
   // Handle different states
   if (data.isTyping) {
     // Show "User is typing..." indicator
+    // In active chat: show at bottom of messages
+    // In chat list: show next to conversation
   }
   if (data.isRecording) {
     // Show "User is recording..." indicator
+    // In active chat: show at bottom of messages
+    // In chat list: show "🎙️ Recording..." next to conversation
   }
+});
+```
+
+**Usage in Different Views:**
+
+**Inside Active Chat:**
+```javascript
+// Show indicator at bottom of chat
+if (data.conversationId === currentConversationId) {
+  if (data.isTyping) showTypingIndicator(data.userId);
+  if (data.isRecording) showRecordingIndicator(data.userId);
+}
+```
+
+**In Chat List (Outside Conversation):**
+```javascript
+// Show indicator next to conversation in list
+socket.on("typing", (data) => {
+  updateConversationIndicator(data.conversationId, {
+    isTyping: data.isTyping,
+    isRecording: data.isRecording,
+    userId: data.userId
+  });
 });
 ```
 
@@ -262,10 +298,119 @@ socket.on("last_message_update", (data) => {
   //   },
   //   unreadCount: 3
   // }
+  
+  // Update conversation in your chat list
+  updateConversationInList(data.conversationId, {
+    lastMessage: data.lastMessage,
+    unreadCount: data.unreadCount,
+    timestamp: new Date()
+  });
 });
 ```
 
 **Note:** This event is emitted to all participants whenever a new message is sent. It provides the last message details and the unread count for each participant. This is useful for updating the conversation list outside of the active chat.
+
+#### 10. Conversation Created (NEW)
+```javascript
+socket.on("conversation_created", (data) => {
+  console.log("New conversation:", data);
+  // {
+  //   conversation: {
+  //     id: "123",
+  //     type: "DIRECT" | "GROUP",
+  //     name: "Group Name" (if GROUP),
+  //     avatarUrl: "https://...",
+  //     createdAt: "2024-01-01T00:00:00Z",
+  //     participants: [...]
+  //   }
+  // }
+  
+  // Add new conversation to your chat list
+  addConversationToList(data.conversation);
+});
+```
+
+**Note:** Emitted when someone creates a new conversation with you or adds you to a group. Automatically appears in your chat list.
+
+#### 11. Conversation Updated (NEW)
+```javascript
+socket.on("conversation_updated", (data) => {
+  console.log("Conversation updated:", data);
+  // {
+  //   conversation: {
+  //     id: "123",
+  //     type: "GROUP",
+  //     name: "Updated Group Name",
+  //     avatarUrl: "https://...",
+  //     description: "New description",
+  //     participants: [...]
+  //   }
+  // }
+  
+  // Update conversation in your chat list
+  updateConversationInList(data.conversation);
+});
+```
+
+**Note:** Emitted when group details change (name, avatar, description). All participants receive this update.
+
+#### 12. Conversation Deleted (NEW)
+```javascript
+socket.on("conversation_deleted", (data) => {
+  console.log("Conversation deleted:", data);
+  // {
+  //   conversationId: "123"
+  // }
+  
+  // Remove conversation from your chat list
+  removeConversationFromList(data.conversationId);
+});
+```
+
+**Note:** Emitted when a group is deleted or when you're removed from a conversation. Removes it from your chat list.
+
+#### 13. Participant Added (NEW)
+```javascript
+socket.on("participant_added", (data) => {
+  console.log("Participant added:", data);
+  // {
+  //   conversationId: "123",
+  //   participant: {
+  //     profileId: "user-id",
+  //     displayName: "User Name",
+  //     avatarUrl: "https://...",
+  //     roleInChat: "member",
+  //     joinedAt: "2024-01-01T00:00:00Z"
+  //   }
+  // }
+  
+  // Update participants list for this conversation
+  addParticipantToConversation(data.conversationId, data.participant);
+});
+```
+
+**Note:** Emitted when a new member is added to a group. All existing participants receive this.
+
+#### 14. Participant Removed (NEW)
+```javascript
+socket.on("participant_removed", (data) => {
+  console.log("Participant removed:", data);
+  // {
+  //   conversationId: "123",
+  //   participantId: "user-id"
+  // }
+  
+  // If it's you, remove conversation from list
+  if (data.participantId === currentUserId) {
+    removeConversationFromList(data.conversationId);
+  } else {
+    // Otherwise, just update participants
+    removeParticipantFromConversation(data.conversationId, data.participantId);
+  }
+});
+```
+
+**Note:** Emitted when someone is removed from a group. If you're removed, the conversation disappears from your list.
 
 ---
 
@@ -1017,6 +1162,10 @@ Remove your emoji reaction from a message.
 - **Auto-timeout:** Recommended 3 seconds of inactivity
 - **Real-time updates** via Socket.io
 - **Flexible:** Can show both indicators simultaneously or separately
+- **Multi-view support:** Works both **inside conversations** and in **chat list** (NEW!)
+  - Inside chat: Shows indicator at bottom of messages
+  - In chat list: Shows indicator next to conversation name
+  - Requires `participantIds` parameter for chat list updates
 
 ### Last Message Updates (NEW)
 - **Real-time conversation list updates** when new messages arrive
@@ -1464,7 +1613,12 @@ The backend has CORS enabled for all origins. No additional configuration needed
 | `message_reaction_removed` | Reaction removed | `{ conversationId, messageId, reactionId, profileId }` |
 | `user_online` | User came online | `{ userId, conversationId }` |
 | `user_offline` | User went offline | `{ userId, conversationId }` |
-| `last_message_update` | Last message & unread count (NEW) | `{ conversationId, lastMessage, unreadCount }` |
+| `last_message_update` | Last message & unread count | `{ conversationId, lastMessage, unreadCount }` |
+| `conversation_created` | New conversation created (NEW) | `{ conversation }` |
+| `conversation_updated` | Conversation details changed (NEW) | `{ conversation }` |
+| `conversation_deleted` | Conversation deleted (NEW) | `{ conversationId }` |
+| `participant_added` | Member added to group (NEW) | `{ conversationId, participant }` |
+| `participant_removed` | Member removed from group (NEW) | `{ conversationId, participantId }` |
 
 ---
 
