@@ -72,12 +72,38 @@ socket.emit("leave_conversation", {
 });
 ```
 
-#### 4. Typing Indicator
+#### 4. Typing/Recording Indicator
 ```javascript
+// Typing indicator
 socket.emit("typing", {
   conversationId: "123",
   userId: "your-user-id",
-  isTyping: true // or false
+  isTyping: true,
+  isRecording: false
+});
+
+// Recording indicator (voice message)
+socket.emit("typing", {
+  conversationId: "123",
+  userId: "your-user-id",
+  isTyping: false,
+  isRecording: true
+});
+
+// Both can be sent together (edge case)
+socket.emit("typing", {
+  conversationId: "123",
+  userId: "your-user-id",
+  isTyping: true,
+  isRecording: true
+});
+
+// Stop all indicators
+socket.emit("typing", {
+  conversationId: "123",
+  userId: "your-user-id",
+  isTyping: false,
+  isRecording: false
 });
 ```
 
@@ -135,15 +161,24 @@ socket.on("messages_read", (data) => {
 });
 ```
 
-#### 3. Typing Indicator
+#### 3. Typing/Recording Indicator
 ```javascript
 socket.on("typing", (data) => {
-  console.log("User typing:", data);
+  console.log("User typing/recording:", data);
   // {
   //   conversationId: "123",
   //   userId: "user-id",
-  //   isTyping: true
+  //   isTyping: true,      // User is typing text
+  //   isRecording: false   // User is NOT recording voice
   // }
+  
+  // Handle different states
+  if (data.isTyping) {
+    // Show "User is typing..." indicator
+  }
+  if (data.isRecording) {
+    // Show "User is recording..." indicator
+  }
 });
 ```
 
@@ -210,6 +245,27 @@ socket.on("user_offline", (data) => {
   // }
 });
 ```
+
+#### 9. Last Message Update (NEW)
+```javascript
+socket.on("last_message_update", (data) => {
+  console.log("Last message updated:", data);
+  // {
+  //   conversationId: "123",
+  //   lastMessage: {
+  //     id: "456",
+  //     content: "Last message content",
+  //     type: "TEXT",
+  //     senderId: "user-id",
+  //     senderName: "User Name",
+  //     createdAt: "2024-01-01T00:00:00Z"
+  //   },
+  //   unreadCount: 3
+  // }
+});
+```
+
+**Note:** This event is emitted to all participants whenever a new message is sent. It provides the last message details and the unread count for each participant. This is useful for updating the conversation list outside of the active chat.
 
 ---
 
@@ -953,11 +1009,21 @@ Remove your emoji reaction from a message.
 - **Debounced** typing indicators
 - **50-70% reduction** in component re-renders
 
-### Typing Indicators
-- Shows "**User is typing...**" for single users
-- Shows "**3 people are typing...**" for multiple users
-- **Auto-timeout** after 3 seconds of inactivity
-- Real-time updates via Socket.io
+### Typing & Recording Indicators
+- **Typing:** Shows "**User is typing...**" when `isTyping: true`
+- **Recording:** Shows "**User is recording...**" when `isRecording: true`
+- **Multiple users:** Shows "**3 people are typing...**" or "**2 people are recording...**"
+- **Combined event:** Single `typing` event handles both states
+- **Auto-timeout:** Recommended 3 seconds of inactivity
+- **Real-time updates** via Socket.io
+- **Flexible:** Can show both indicators simultaneously or separately
+
+### Last Message Updates (NEW)
+- **Real-time conversation list updates** when new messages arrive
+- Automatically updates **last message preview** in conversation list
+- Shows **unread message count** for each conversation
+- Updates even when user is **outside the active chat**
+- Enables **live conversation list** without polling
 
 ---
 
@@ -1011,6 +1077,22 @@ Remove your emoji reaction from a message.
    // Listen for deletions
    socket.on("message_deleted", (data) => {
      console.log("Message deleted:", data);
+   });
+   
+   // Listen for typing/recording indicators
+   socket.on("typing", (data) => {
+     if (data.isTyping) {
+       console.log("User is typing...");
+     }
+     if (data.isRecording) {
+       console.log("User is recording...");
+     }
+   });
+   
+   // Listen for last message updates
+   socket.on("last_message_update", (data) => {
+     console.log("Last message updated:", data);
+     // Update conversation list UI
    });
    ```
 
@@ -1149,7 +1231,9 @@ Remove your emoji reaction from a message.
 - Reactions broadcast to **all participants**
 - Deletions broadcast to **all participants**
 - Read receipts emitted when messages marked as read
-- Typing indicators auto-timeout after 3 seconds
+- Typing/recording indicators emitted to **all participants except sender**
+- Typing/recording auto-timeout recommended (3 seconds)
+- Last message updates sent to **all participants** with personalized unread counts
 
 ### Data Models
 - **Conversation IDs**: BigInt (returned as strings)
@@ -1211,16 +1295,21 @@ Remove your emoji reaction from a message.
 
 ---
 
-## 🚀 Recent Updates (v2.0)
+## 🚀 Recent Updates (v3.2)
 
-### New Features
+### Latest Features (v3.2)
+- ✅ **Recording Indicator** - Show when users are recording voice messages
+- ✅ **Last Message Updates** - Real-time conversation list updates with unread counts
+- ✅ **Live Conversation List** - Updates automatically without polling
+
+### Previous Features (v2.0-3.1)
 - ✅ **Message Reactions** - Add emoji reactions to any message
 - ✅ **Delete Messages** - Soft delete your own messages
 - ✅ **Message Grouping** - Automatic grouping by date/sender
 - ✅ **Optimistic UI** - Instant feedback when sending
 - ✅ **Performance Boost** - 50-70% fewer re-renders
 
-### New Group Chat Features
+### Group Chat Features
 - ✅ **Create Groups** - Create group chats with multiple friends
 - ✅ **Group Management** - Edit name, description, avatar (admin only)
 - ✅ **Add Members** - Invite more friends to groups (admin only)
@@ -1353,6 +1442,32 @@ The backend has CORS enabled for all origins. No additional configuration needed
 
 ---
 
-**Version:** 3.1.0  
-**Last Updated:** January 14, 2026  
+---
+
+## 📝 Socket Events Summary
+
+### Client → Server Events
+| Event | Purpose | Data |
+|-------|---------|------|
+| `join_conversation` | Join a conversation room | `{ conversationId, userId, participantIds }` |
+| `leave_conversation` | Leave a conversation room | `{ conversationId, userId }` |
+| `typing` | Indicate typing or recording | `{ conversationId, userId, isTyping, isRecording }` |
+
+### Server → Client Events
+| Event | Purpose | Data |
+|-------|---------|------|
+| `new_message` | New message received | `{ conversationId, message }` |
+| `messages_read` | Messages marked as read | `{ conversationId, readBy, messageIds }` |
+| `typing` | User typing/recording status | `{ conversationId, userId, isTyping, isRecording }` |
+| `message_deleted` | Message was deleted | `{ conversationId, messageId }` |
+| `message_reaction_added` | Reaction added | `{ conversationId, messageId, reaction }` |
+| `message_reaction_removed` | Reaction removed | `{ conversationId, messageId, reactionId, profileId }` |
+| `user_online` | User came online | `{ userId, conversationId }` |
+| `user_offline` | User went offline | `{ userId, conversationId }` |
+| `last_message_update` | Last message & unread count (NEW) | `{ conversationId, lastMessage, unreadCount }` |
+
+---
+
+**Version:** 3.2.0  
+**Last Updated:** January 16, 2026  
 **Production URL:** https://done-buddy-production.up.railway.app
