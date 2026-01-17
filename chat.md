@@ -340,9 +340,9 @@ socket.on("message_edited", (data) => {
 
 **Note:** Emitted to all participants when a message is edited. The `editedAt` timestamp indicates when the edit occurred. The `originalContent` field preserves the first version of the message.
 
-#### 6. Message Reaction
+#### 6. Message Reaction Added
 ```javascript
-socket.on("message_reaction", (data) => {
+socket.on("message_reaction_added", (data) => {
   console.log("Message reaction:", data);
   // {
   //   conversationId: "123",
@@ -358,7 +358,7 @@ socket.on("message_reaction", (data) => {
 });
 ```
 
-#### 6. Message Reaction Removed (NEW)
+#### 7. Message Reaction Removed (NEW)
 ```javascript
 socket.on("message_reaction_removed", (data) => {
   console.log("Reaction removed:", data);
@@ -371,7 +371,7 @@ socket.on("message_reaction_removed", (data) => {
 });
 ```
 
-#### 9. User Online
+#### 8. User Online
 ```javascript
 socket.on("user_online", (data) => {
   console.log("User online:", data);
@@ -382,7 +382,7 @@ socket.on("user_online", (data) => {
 });
 ```
 
-#### 10. User Offline
+#### 9. User Offline
 ```javascript
 socket.on("user_offline", (data) => {
   console.log("User offline:", data);
@@ -393,7 +393,7 @@ socket.on("user_offline", (data) => {
 });
 ```
 
-#### 11. Last Message Update
+#### 10. Last Message Update
 ```javascript
 socket.on("last_message_update", (data) => {
   console.log("Last message updated:", data);
@@ -421,7 +421,7 @@ socket.on("last_message_update", (data) => {
 
 **Note:** This event is emitted to all participants whenever a new message is sent. It provides the last message details and the unread count for each participant. This is useful for updating the conversation list outside of the active chat.
 
-#### 12. Conversation Created
+#### 11. Conversation Created
 ```javascript
 socket.on("conversation_created", (data) => {
   console.log("New conversation:", data);
@@ -443,7 +443,7 @@ socket.on("conversation_created", (data) => {
 
 **Note:** Emitted when someone creates a new conversation with you or adds you to a group. Automatically appears in your chat list.
 
-#### 13. Conversation Updated
+#### 12. Conversation Updated
 ```javascript
 socket.on("conversation_updated", (data) => {
   console.log("Conversation updated:", data);
@@ -465,7 +465,7 @@ socket.on("conversation_updated", (data) => {
 
 **Note:** Emitted when group details change (name, avatar, description). All participants receive this update.
 
-#### 14. Conversation Deleted
+#### 13. Conversation Deleted
 ```javascript
 socket.on("conversation_deleted", (data) => {
   console.log("Conversation deleted:", data);
@@ -480,7 +480,7 @@ socket.on("conversation_deleted", (data) => {
 
 **Note:** Emitted when a group is deleted or when you're removed from a conversation. Removes it from your chat list.
 
-#### 15. Participant Added
+#### 14. Participant Added
 ```javascript
 socket.on("participant_added", (data) => {
   console.log("Participant added:", data);
@@ -502,7 +502,7 @@ socket.on("participant_added", (data) => {
 
 **Note:** Emitted when a new member is added to a group. All existing participants receive this.
 
-#### 16. Participant Removed
+#### 15. Participant Removed
 ```javascript
 socket.on("participant_removed", (data) => {
   console.log("Participant removed:", data);
@@ -522,6 +522,219 @@ socket.on("participant_removed", (data) => {
 ```
 
 **Note:** Emitted when someone is removed from a group. If you're removed, the conversation disappears from your list.
+
+#### 16. Socket Connection Events
+
+The following events are automatically handled by Socket.IO:
+
+```javascript
+// Connection established
+socket.on("connect", () => {
+  console.log("Connected to Socket.IO server");
+  console.log("Socket ID:", socket.id);
+});
+
+// Connection error
+socket.on("connect_error", (error) => {
+  console.error("Connection error:", error);
+  // Retry logic is handled automatically by Socket.IO
+});
+
+// Disconnection
+socket.on("disconnect", (reason) => {
+  console.log("Disconnected:", reason);
+  // Reasons: 
+  // - "io server disconnect": Server forcefully disconnected
+  // - "io client disconnect": Client called socket.disconnect()
+  // - "ping timeout": Server didn't respond to ping in time
+  // - "transport close": Underlying transport was closed
+  // - "transport error": Transport error occurred
+});
+
+// Reconnection attempt
+socket.on("reconnect_attempt", (attemptNumber) => {
+  console.log("Reconnection attempt:", attemptNumber);
+});
+
+// Reconnected successfully
+socket.on("reconnect", (attemptNumber) => {
+  console.log("Reconnected after", attemptNumber, "attempts");
+  // Re-join rooms after reconnection
+  socket.emit("join_conversation", {
+    conversationId: currentConversationId,
+    userId: currentUserId,
+    participantIds: participantIds
+  });
+});
+
+// Custom error event
+socket.on("error", (error) => {
+  console.error("Socket error:", error);
+});
+```
+
+**Important Connection Notes:**
+- Socket.IO automatically handles reconnection with exponential backoff
+- After reconnection, you must re-join all conversation rooms
+- Connection state is managed per socket (multiple tabs = multiple connections)
+- The `userId` query parameter links sockets to users in `userSocketMap`
+- Each user can have multiple sockets (e.g., mobile + desktop)
+- All user's sockets receive events when using `emitToUser()`
+
+---
+
+## 🏗️ Socket.IO Architecture
+
+### Room Management
+
+The chat system uses a sophisticated room-based architecture:
+
+#### Room Types
+
+1. **Conversation Rooms** (`conversation_{conversationId}`)
+   - Primary room for each conversation
+   - Used for all real-time message events
+   - Format: `conversation_123`
+   - Joined when: Client emits `join_conversation`
+   - Purpose: Broadcast messages to all active participants
+
+2. **Participant Rooms** (`userId_userId`)
+   - Legacy support for direct chats
+   - Format: `abc123_def456` (sorted alphabetically)
+   - Automatically joined for 2-participant conversations
+   - Purpose: Backward compatibility
+
+3. **User Socket Mapping** (`userSocketMap`)
+   - Maps each `userId` to a Set of `socketIds`
+   - Supports multiple connections per user (mobile + desktop)
+   - Used for direct user-to-user emissions
+   - Format: `Map<userId, Set<socketId>>`
+
+#### Event Emission Patterns
+
+**Pattern 1: Room Broadcast (Excluding Sender)**
+```javascript
+// Used for: new_message, message_deleted, message_edited
+emitToRoomExceptUser(conversationRoom, senderId, "new_message", data);
+```
+- Sends to all users in room EXCEPT the sender
+- Prevents duplicate messages for sender (they get it from API response)
+
+**Pattern 2: Direct User Emission**
+```javascript
+// Used for: last_message_update, conversation_created, typing (chat list)
+emitToUser(userId, "last_message_update", data);
+```
+- Sends to ALL sockets of a specific user
+- Ensures users outside active chat receive updates
+- Enables chat list real-time updates
+
+**Pattern 3: Room Broadcast (All Users)**
+```javascript
+// Used for: typing (inside chat), user_online, user_offline
+io.to(conversationRoom).emit("typing", data);
+```
+- Sends to ALL users in room (including sender optional)
+- Used for presence and indicators
+
+**Pattern 4: Participant Iteration**
+```javascript
+// Used for: participant_added, participant_removed, conversation_updated
+participantIds.forEach(pid => {
+  emitToUser(pid, "participant_added", data);
+});
+```
+- Explicitly sends to each participant
+- Ensures delivery even if not in room
+- Used for management operations
+
+### Multi-Connection Support
+
+**Key Feature:** Each user can have multiple socket connections simultaneously.
+
+```javascript
+// userSocketMap structure
+{
+  "user-id-1": Set(["socketId-a", "socketId-b", "socketId-c"]),
+  "user-id-2": Set(["socketId-x"])
+}
+```
+
+**Use Cases:**
+- User opens chat on desktop browser
+- User opens chat on mobile browser
+- User opens multiple tabs
+- All connections receive real-time updates
+
+**Benefits:**
+- Seamless multi-device experience
+- No message loss when switching devices
+- Consistent state across all clients
+
+### Connection Lifecycle
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 1. CONNECT                                                   │
+│    socket.connect({ query: { userId } })                    │
+│    → Added to userSocketMap                                 │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│ 2. JOIN CONVERSATION                                         │
+│    socket.emit("join_conversation", { conversationId, ... })│
+│    → Joins conversation room                                │
+│    → Emits user_online to others                           │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│ 3. ACTIVE COMMUNICATION                                      │
+│    • Send/receive messages                                  │
+│    • Emit typing indicators                                 │
+│    • Receive real-time updates                             │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│ 4. LEAVE CONVERSATION (Optional)                            │
+│    socket.emit("leave_conversation", { conversationId })    │
+│    → Leaves conversation room                               │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│ 5. DISCONNECT                                                │
+│    socket.disconnect() or connection lost                   │
+│    → Removed from userSocketMap                             │
+│    → Emits user_offline if last socket                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Security & Validation
+
+**Rate Limiting:**
+- Typing events throttled to max 1 per 400ms
+- Prevents event spam and reduces server load
+
+**Validation:**
+- All socket events validate required fields
+- Invalid data logged but doesn't crash server
+- Malformed events silently ignored
+
+**Authorization:**
+- Socket connection requires valid `userId`
+- Conversation participation verified before joining rooms
+- Only participants receive conversation events
+
+### Error Handling
+
+**Graceful Degradation:**
+- Database errors don't crash socket connection
+- Missing data falls back to defaults
+- Failed emissions logged but don't block other events
+
+**Automatic Cleanup:**
+- Stale typing indicators removed after 3-4 seconds
+- Disconnected sockets automatically removed from maps
+- Empty user entries cleaned from userSocketMap
 
 ---
 
@@ -1662,8 +1875,12 @@ Remove your emoji reaction from a message.
    });
    
    // Listen for reactions
-   socket.on("message_reaction", (data) => {
+   socket.on("message_reaction_added", (data) => {
      console.log("Reaction added:", data);
+   });
+   
+   socket.on("message_reaction_removed", (data) => {
+     console.log("Reaction removed:", data);
    });
    
    // Listen for deletions
@@ -1867,6 +2084,45 @@ Remove your emoji reaction from a message.
 - Automatic cleanup on disconnect
 - Online/offline status broadcast to conversation participants
 
+### Socket Event Names (IMPORTANT)
+**⚠️ Correct Event Names to Use:**
+- ✅ `message_reaction_added` - When a reaction is added
+- ✅ `message_reaction_removed` - When a reaction is removed
+- ❌ `message_reaction` - **NOT USED** (old/incorrect name)
+
+**All Socket Events:**
+```javascript
+// Client → Server
+- join_conversation
+- leave_conversation  
+- typing
+
+// Server → Client
+- new_message
+- messages_read
+- typing
+- message_deleted
+- message_edited
+- message_reaction_added      // ✅ Use this
+- message_reaction_removed
+- user_online
+- user_offline
+- last_message_update
+- conversation_created
+- conversation_updated
+- conversation_deleted
+- participant_added
+- participant_removed
+
+// Connection Events (auto-handled)
+- connect
+- disconnect
+- connect_error
+- reconnect
+- reconnect_attempt
+- error
+```
+
 ### Data Models
 - **Conversation IDs**: BigInt (returned as strings)
 - **Message IDs**: BigInt (returned as strings)
@@ -1891,6 +2147,550 @@ Remove your emoji reaction from a message.
 - Pagination validated (page ≥ 1, size 1-50)
 - Only message sender can delete their messages
 - Only reaction owner can remove their reaction
+
+---
+
+## 🎯 Socket.IO Best Practices
+
+### Frontend Implementation
+
+#### 1. Connection Management
+
+```javascript
+import io from "socket.io-client";
+
+class ChatSocket {
+  constructor(userId, apiUrl) {
+    this.userId = userId;
+    this.socket = null;
+    this.reconnectAttempts = 0;
+    this.currentConversationId = null;
+    this.participantIds = [];
+  }
+
+  connect() {
+    this.socket = io(apiUrl, {
+      query: { userId: this.userId },
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5
+    });
+
+    this.setupEventListeners();
+  }
+
+  setupEventListeners() {
+    this.socket.on("connect", () => {
+      console.log("✅ Connected:", this.socket.id);
+      // Re-join conversation after reconnection
+      if (this.currentConversationId) {
+        this.joinConversation(this.currentConversationId, this.participantIds);
+      }
+    });
+
+    this.socket.on("disconnect", (reason) => {
+      console.log("❌ Disconnected:", reason);
+    });
+
+    this.socket.on("connect_error", (error) => {
+      console.error("Connection error:", error);
+    });
+  }
+
+  joinConversation(conversationId, participantIds) {
+    this.currentConversationId = conversationId;
+    this.participantIds = participantIds;
+    
+    this.socket.emit("join_conversation", {
+      conversationId,
+      userId: this.userId,
+      participantIds
+    });
+  }
+
+  leaveConversation(conversationId) {
+    this.socket.emit("leave_conversation", {
+      conversationId,
+      userId: this.userId
+    });
+    this.currentConversationId = null;
+    this.participantIds = [];
+  }
+
+  disconnect() {
+    if (this.socket) {
+      this.socket.disconnect();
+    }
+  }
+}
+
+// Usage
+const chatSocket = new ChatSocket(currentUserId, SOCKET_URL);
+chatSocket.connect();
+```
+
+#### 2. Typing Indicator (Throttled)
+
+```javascript
+import { debounce } from "lodash";
+
+class TypingIndicator {
+  constructor(socket, conversationId, userId, participantIds) {
+    this.socket = socket;
+    this.conversationId = conversationId;
+    this.userId = userId;
+    this.participantIds = participantIds;
+    this.userName = getUserName(); // Get current user's display name
+    
+    // Throttle emissions to 400ms
+    this.emitTyping = debounce(this.sendTypingEvent.bind(this), 400, {
+      leading: true,
+      trailing: true
+    });
+  }
+
+  sendTypingEvent(isTyping, isRecording = false) {
+    this.socket.emit("typing", {
+      conversationId: this.conversationId,
+      userId: this.userId,
+      userName: this.userName, // ⭐ Important for group chats
+      isTyping,
+      isRecording,
+      participantIds: this.participantIds // ⭐ Required for chat list indicators
+    });
+  }
+
+  startTyping() {
+    this.emitTyping(true, false);
+  }
+
+  stopTyping() {
+    this.emitTyping(false, false);
+  }
+
+  startRecording() {
+    this.emitTyping(false, true);
+  }
+
+  stopRecording() {
+    this.emitTyping(false, false);
+  }
+}
+
+// Usage in input component
+const typingIndicator = new TypingIndicator(socket, conversationId, userId, participantIds);
+
+// On input change
+inputElement.addEventListener("input", () => {
+  typingIndicator.startTyping();
+});
+
+// On input blur or send
+inputElement.addEventListener("blur", () => {
+  typingIndicator.stopTyping();
+});
+```
+
+#### 3. Indicator Display (with Auto-Cleanup)
+
+```javascript
+class IndicatorManager {
+  constructor() {
+    this.indicators = new Map(); // conversationId → { users: Set, timestamp }
+  }
+
+  addIndicator(conversationId, userId, userName, type) {
+    if (!this.indicators.has(conversationId)) {
+      this.indicators.set(conversationId, { 
+        typing: new Map(),
+        recording: new Map()
+      });
+    }
+
+    const conv = this.indicators.get(conversationId);
+    const map = type === "typing" ? conv.typing : conv.recording;
+    
+    map.set(userId, {
+      userName,
+      timestamp: Date.now()
+    });
+
+    this.updateUI(conversationId);
+  }
+
+  removeIndicator(conversationId, userId, type) {
+    const conv = this.indicators.get(conversationId);
+    if (!conv) return;
+
+    const map = type === "typing" ? conv.typing : conv.recording;
+    map.delete(userId);
+
+    this.updateUI(conversationId);
+  }
+
+  // Auto-cleanup stale indicators (>4 seconds old)
+  cleanupStale() {
+    const now = Date.now();
+    const STALE_TIMEOUT = 4000;
+
+    for (const [conversationId, conv] of this.indicators) {
+      for (const [userId, data] of conv.typing) {
+        if (now - data.timestamp > STALE_TIMEOUT) {
+          conv.typing.delete(userId);
+        }
+      }
+      for (const [userId, data] of conv.recording) {
+        if (now - data.timestamp > STALE_TIMEOUT) {
+          conv.recording.delete(userId);
+        }
+      }
+      this.updateUI(conversationId);
+    }
+  }
+
+  updateUI(conversationId) {
+    const conv = this.indicators.get(conversationId);
+    if (!conv) return;
+
+    const typingUsers = Array.from(conv.typing.values());
+    const recordingUsers = Array.from(conv.recording.values());
+
+    // Update UI based on indicator counts
+    if (typingUsers.length > 0) {
+      this.showTypingIndicator(conversationId, typingUsers);
+    } else {
+      this.hideTypingIndicator(conversationId);
+    }
+
+    if (recordingUsers.length > 0) {
+      this.showRecordingIndicator(conversationId, recordingUsers);
+    } else {
+      this.hideRecordingIndicator(conversationId);
+    }
+  }
+
+  showTypingIndicator(conversationId, users) {
+    const count = users.length;
+    let text;
+
+    if (count === 1) {
+      text = `${users[0].userName} is typing...`;
+    } else if (count === 2) {
+      text = `${users[0].userName} and ${users[1].userName} are typing...`;
+    } else {
+      text = `${count} people are typing...`;
+    }
+
+    // Update DOM
+    document.querySelector(`#typing-${conversationId}`).textContent = text;
+  }
+
+  showRecordingIndicator(conversationId, users) {
+    const count = users.length;
+    let text;
+
+    if (count === 1) {
+      text = `🎙️ ${users[0].userName} is recording...`;
+    } else {
+      text = `🎙️ ${count} people are recording...`;
+    }
+
+    // Update DOM
+    document.querySelector(`#recording-${conversationId}`).textContent = text;
+  }
+}
+
+// Initialize and auto-cleanup
+const indicatorManager = new IndicatorManager();
+setInterval(() => indicatorManager.cleanupStale(), 1000);
+
+// Listen to socket events
+socket.on("typing", (data) => {
+  if (data.isTyping) {
+    indicatorManager.addIndicator(
+      data.conversationId,
+      data.userId,
+      data.userName,
+      "typing"
+    );
+  } else {
+    indicatorManager.removeIndicator(
+      data.conversationId,
+      data.userId,
+      "typing"
+    );
+  }
+
+  if (data.isRecording) {
+    indicatorManager.addIndicator(
+      data.conversationId,
+      data.userId,
+      data.userName,
+      "recording"
+    );
+  } else {
+    indicatorManager.removeIndicator(
+      data.conversationId,
+      data.userId,
+      "recording"
+    );
+  }
+});
+```
+
+#### 4. Message Handling (Optimistic UI)
+
+```javascript
+class MessageManager {
+  constructor(socket, conversationId) {
+    this.socket = socket;
+    this.conversationId = conversationId;
+    this.messages = [];
+    this.optimisticMessages = new Map(); // tempId → message
+  }
+
+  async sendMessage(content, type = "TEXT") {
+    // Generate temporary ID for optimistic UI
+    const tempId = `temp-${Date.now()}`;
+    
+    // Add optimistic message to UI
+    const optimisticMessage = {
+      id: tempId,
+      content,
+      type,
+      senderId: currentUserId,
+      sender: currentUserProfile,
+      createdAt: new Date().toISOString(),
+      isOptimistic: true // Flag for UI styling
+    };
+
+    this.addOptimisticMessage(tempId, optimisticMessage);
+
+    try {
+      // Send to API
+      const response = await fetch(`/api/messages/${this.conversationId}/text`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "authorization": token
+        },
+        body: JSON.stringify({ content, type })
+      });
+
+      const result = await response.json();
+
+      // Replace optimistic message with real one
+      this.replaceOptimisticMessage(tempId, result.data);
+
+    } catch (error) {
+      console.error("Failed to send message:", error);
+      // Mark optimistic message as failed
+      this.markOptimisticMessageFailed(tempId);
+    }
+  }
+
+  addOptimisticMessage(tempId, message) {
+    this.optimisticMessages.set(tempId, message);
+    this.messages.push(message);
+    this.updateUI();
+  }
+
+  replaceOptimisticMessage(tempId, realMessage) {
+    const index = this.messages.findIndex(m => m.id === tempId);
+    if (index !== -1) {
+      this.messages[index] = realMessage;
+      this.optimisticMessages.delete(tempId);
+      this.updateUI();
+    }
+  }
+
+  markOptimisticMessageFailed(tempId) {
+    const message = this.messages.find(m => m.id === tempId);
+    if (message) {
+      message.failed = true;
+      this.updateUI();
+    }
+  }
+
+  // Listen to socket for new messages from others
+  onNewMessage(messageData) {
+    // Don't add if it's from current user (already have via API)
+    if (messageData.message.senderId === currentUserId) {
+      return;
+    }
+
+    this.messages.push(messageData.message);
+    this.updateUI();
+  }
+}
+
+// Usage
+const messageManager = new MessageManager(socket, conversationId);
+
+socket.on("new_message", (data) => {
+  messageManager.onNewMessage(data);
+});
+```
+
+#### 5. Room Management
+
+```javascript
+class ConversationManager {
+  constructor(socket, userId) {
+    this.socket = socket;
+    this.userId = userId;
+    this.activeConversations = new Set();
+  }
+
+  joinConversation(conversationId, participantIds) {
+    this.socket.emit("join_conversation", {
+      conversationId,
+      userId: this.userId,
+      participantIds
+    });
+
+    this.activeConversations.add(conversationId);
+    console.log(`Joined conversation: ${conversationId}`);
+  }
+
+  leaveConversation(conversationId) {
+    this.socket.emit("leave_conversation", {
+      conversationId,
+      userId: this.userId
+    });
+
+    this.activeConversations.delete(conversationId);
+    console.log(`Left conversation: ${conversationId}`);
+  }
+
+  // Clean up when navigating away
+  cleanup() {
+    for (const conversationId of this.activeConversations) {
+      this.leaveConversation(conversationId);
+    }
+  }
+}
+
+// React example with useEffect
+useEffect(() => {
+  if (conversationId && participantIds) {
+    conversationManager.joinConversation(conversationId, participantIds);
+  }
+
+  return () => {
+    if (conversationId) {
+      conversationManager.leaveConversation(conversationId);
+    }
+  };
+}, [conversationId]);
+```
+
+### Common Pitfalls & Solutions
+
+#### ❌ Pitfall 1: Not Providing `participantIds` in Typing Event
+```javascript
+// BAD - indicators won't appear in chat list
+socket.emit("typing", {
+  conversationId,
+  userId,
+  isTyping: true
+});
+
+// GOOD - indicators work everywhere
+socket.emit("typing", {
+  conversationId,
+  userId,
+  userName: currentUserName, // ⭐ Important for group chats
+  isTyping: true,
+  participantIds: allParticipantIds // ⭐ Required
+});
+```
+
+#### ❌ Pitfall 2: Not Cleaning Up Stale Indicators
+```javascript
+// BAD - indicators never disappear
+socket.on("typing", (data) => {
+  if (data.isTyping) {
+    showTypingIndicator(data.userId);
+  }
+});
+
+// GOOD - auto-cleanup after 4 seconds
+socket.on("typing", (data) => {
+  if (data.isTyping) {
+    showTypingIndicator(data.userId, Date.now());
+  }
+  // Run cleanup every second
+  setInterval(() => cleanupStaleIndicators(), 1000);
+});
+```
+
+#### ❌ Pitfall 3: Not Re-joining Rooms After Reconnection
+```javascript
+// BAD - lose connection to room after reconnect
+socket.on("connect", () => {
+  console.log("Connected");
+});
+
+// GOOD - automatically re-join
+socket.on("reconnect", () => {
+  console.log("Reconnected - re-joining rooms");
+  if (currentConversationId) {
+    socket.emit("join_conversation", {
+      conversationId: currentConversationId,
+      userId: currentUserId,
+      participantIds: currentParticipantIds
+    });
+  }
+});
+```
+
+#### ❌ Pitfall 4: Using Wrong Event Names
+```javascript
+// BAD - wrong event name (old/incorrect)
+socket.on("message_reaction", (data) => {
+  updateReaction(data);
+});
+
+// GOOD - correct event name
+socket.on("message_reaction_added", (data) => {
+  updateReaction(data);
+});
+```
+
+#### ❌ Pitfall 5: Not Throttling Typing Events
+```javascript
+// BAD - emits on every keystroke (spam)
+input.addEventListener("input", () => {
+  socket.emit("typing", { isTyping: true });
+});
+
+// GOOD - throttled to 400ms
+const throttledTyping = debounce(() => {
+  socket.emit("typing", { isTyping: true });
+}, 400);
+
+input.addEventListener("input", throttledTyping);
+```
+
+### Performance Optimization
+
+1. **Debounce Typing Events**: Throttle to 400ms maximum
+2. **Memoize Components**: Use React.memo for message components
+3. **Virtual Scrolling**: Implement for large message lists
+4. **Lazy Loading**: Load images only when visible
+5. **Batch Updates**: Group state updates together
+6. **Cleanup Listeners**: Remove socket listeners on unmount
+
+### Security Considerations
+
+1. **Validate User IDs**: Always verify userId matches authenticated user
+2. **Check Permissions**: Verify user is participant before emitting
+3. **Sanitize Input**: Clean message content before sending
+4. **Rate Limiting**: Backend throttles events to prevent spam
+5. **Token Refresh**: Handle expired tokens gracefully
 
 ---
 
@@ -2098,28 +2898,38 @@ The backend has CORS enabled for all origins. No additional configuration needed
 ### Client → Server Events
 | Event | Purpose | Data | Notes |
 |-------|---------|------|-------|
-| `join_conversation` | Join a conversation room | `{ conversationId, userId, participantIds }` | Auto-emit on_online status |
+| `join_conversation` | Join a conversation room | `{ conversationId, userId, participantIds }` | Auto-emit online status |
 | `leave_conversation` | Leave a conversation room | `{ conversationId, userId }` | - |
-| `typing` | Indicate typing or recording | `{ conversationId, userId, isTyping, isRecording, participantIds }` | Throttled to 400ms, continuous while active |
+| `typing` | Indicate typing or recording | `{ conversationId, userId, userName, isTyping, isRecording, participantIds }` | Throttled to 400ms, continuous while active |
 
 ### Server → Client Events
 | Event | Purpose | Data | Notes |
 |-------|---------|------|-------|
 | `new_message` | New message received | `{ conversationId, message }` | Excludes sender, includes reply, mentions, voice |
 | `messages_read` | Messages marked as read | `{ conversationId, readBy, messageIds }` | - |
-| `typing` | User typing/recording status | `{ conversationId, userId, isTyping, isRecording }` | Emitted every 400ms while active |
+| `typing` | User typing/recording status | `{ conversationId, userId, userName, isTyping, isRecording }` | Emitted every 400ms while active |
 | `message_deleted` | Message was deleted | `{ conversationId, messageId }` | - |
-| `message_edited` | Message was edited (NEW) | `{ conversationId, message: { id, content, editedAt, originalContent } }` | ⭐ NEW |
-| `message_reaction` | Reaction added | `{ conversationId, messageId, reaction }` | - |
+| `message_edited` | Message was edited | `{ conversationId, message: { id, content, editedAt, originalContent } }` | ⭐ NEW |
+| `message_reaction_added` | Reaction added | `{ conversationId, messageId, reaction }` | Correct event name |
 | `message_reaction_removed` | Reaction removed | `{ conversationId, messageId, reactionId, profileId }` | - |
-| `user_online` | User came online | `{ userId, conversationId }` | - |
-| `user_offline` | User went offline | `{ userId, conversationId }` | - |
+| `user_online` | User came online | `{ userId, conversationId }` | Auto-emitted on join_conversation |
+| `user_offline` | User went offline | `{ userId, conversationId }` | Auto-emitted on disconnect |
 | `last_message_update` | Last message & unread count | `{ conversationId, lastMessage, unreadCount }` | Personalized per user |
 | `conversation_created` | New conversation created | `{ conversation }` | - |
 | `conversation_updated` | Conversation details changed | `{ conversation }` | Group name, avatar, etc. |
 | `conversation_deleted` | Conversation deleted | `{ conversationId }` | - |
 | `participant_added` | Member added to group | `{ conversationId, participant }` | - |
 | `participant_removed` | Member removed from group | `{ conversationId, participantId }` | - |
+
+### Connection Events (Auto-handled by Socket.IO)
+| Event | Purpose | Notes |
+|-------|---------|-------|
+| `connect` | Connection established | Provides `socket.id` |
+| `disconnect` | Connection lost | Provides disconnect reason |
+| `connect_error` | Connection failed | Auto-retry enabled |
+| `reconnect` | Reconnected successfully | Must re-join rooms |
+| `reconnect_attempt` | Attempting reconnection | Shows attempt number |
+| `error` | Custom error event | Application-level errors |
 
 ---
 
