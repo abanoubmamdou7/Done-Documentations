@@ -6,20 +6,52 @@ Real-time chat functionality between users using Socket.io for instant messaging
 
 The chat system supports:
 - **Direct conversations** between two users (friends only)
-- **Group chats** with multiple participants (NEW!)
-- **Group management** with admin/member roles (NEW!)
-- **Text messages**
+- **Group chats** with multiple participants
+- **Group management** with admin/member roles
+- **Text messages** with @mentions support
 - **Image messages** (uploaded to Cloudinary) with optional captions
 - **File messages** (PDF, DOC, DOCX, ZIP, RAR) with optional captions
+- **Voice messages** (audio recordings) with playback controls ⭐ NEW
 - **Message reactions** with emoji (👍❤️😂😮😢🙏 and more)
+- **Reply/Quote messages** - Reply to previous messages with quote preview ⭐ NEW
+- **Edit messages** - Edit sent messages with history tracking ⭐ NEW
 - **Delete messages** (soft delete - sender only)
+- **Message search** - Full-text search across conversations ⭐ NEW
 - **Real-time messaging** via Socket.io
 - **Read receipts** with checkmarks
-- **Typing indicators** with multi-user support
-- **Online/offline status**
+- **Typing indicators** with multi-user support (continuous while typing)
+- **Recording indicators** for voice messages (continuous while recording)
+- **Online/offline status** with green indicators
 - **Message pagination** with infinite scroll
 - **Message grouping** by date and sender
 - **Optimistic UI** for instant feedback
+- **Real-time chat list updates** with unread counts
+- **Mobile responsive design** with slide navigation
+
+## 🆕 Recent Updates (v4.0.0)
+
+### Latest Features (January 2026) ⭐ MAJOR UPDATE
+- ✅ **Reply/Quote Messages** - Reply to messages with quote preview
+- ✅ **Edit Messages** - Edit sent messages with full history tracking
+- ✅ **Voice Messages** - Record and send audio messages with playback
+- ✅ **@Mentions** - Mention users in messages with autocomplete
+- ✅ **Message Search** - Full-text search across all conversations
+- ✅ **Recording Indicator** - Shows "🎙️ Recording..." when users record voice messages
+- ✅ **Continuous Indicators** - Typing/recording indicators stay visible while active
+- ✅ **Mobile Responsive** - Full mobile support with slide navigation and back button
+- ✅ **Enhanced Logging** - Comprehensive debugging logs for troubleshooting
+- ✅ **Professional Socket.IO** - Security, rate limiting, validation, error handling
+- ✅ **Better Performance** - Optimized event emission (throttled to 400ms)
+- ✅ **Auto-cleanup** - Stale indicators removed after 4 seconds
+
+### Previous Features (v3.0-3.5)
+- ✅ **Message Reactions** - Add emoji reactions to any message
+- ✅ **Delete Messages** - Soft delete your own messages
+- ✅ **Message Grouping** - Automatic grouping by date/sender
+- ✅ **Optimistic UI** - Instant feedback when sending
+- ✅ **Performance Boost** - 50-70% fewer re-renders
+- ✅ **Group Chat Management** - Create, edit, add/remove members
+- ✅ **Real-time Chat List** - Updates without polling
 
 ## 🔐 Authentication
 
@@ -28,7 +60,7 @@ All endpoints require authentication with token in the authorization header:
 authorization: <your-token>
 ```
 
-**Note:** The backend now accepts tokens **without** the "Bearer " prefix. Simply send the token directly in the `authorization` header (lowercase).
+**Note:** The backend accepts tokens **without** the "Bearer " prefix. Simply send the token directly in the `authorization` header (lowercase).
 
 Allowed roles: `USER`, `SELLER`, `MEDIATOR`, `ADMIN`
 
@@ -80,7 +112,7 @@ socket.emit("typing", {
   userId: "your-user-id",
   isTyping: true,
   isRecording: false,
-  participantIds: ["user-id-1", "user-id-2"] // Optional: for chat list updates
+  participantIds: ["user-id-1", "user-id-2"] // Optional but recommended
 });
 
 // Recording indicator (voice message)
@@ -89,7 +121,7 @@ socket.emit("typing", {
   userId: "your-user-id",
   isTyping: false,
   isRecording: true,
-  participantIds: ["user-id-1", "user-id-2"] // Optional: for chat list updates
+  participantIds: ["user-id-1", "user-id-2"] // Optional but recommended
 });
 
 // Both can be sent together (edge case)
@@ -98,7 +130,7 @@ socket.emit("typing", {
   userId: "your-user-id",
   isTyping: true,
   isRecording: true,
-  participantIds: ["user-id-1", "user-id-2"] // Optional: for chat list updates
+  participantIds: ["user-id-1", "user-id-2"]
 });
 
 // Stop all indicators
@@ -107,15 +139,25 @@ socket.emit("typing", {
   userId: "your-user-id",
   isTyping: false,
   isRecording: false,
-  participantIds: ["user-id-1", "user-id-2"] // Optional: for chat list updates
+  participantIds: ["user-id-1", "user-id-2"]
 });
 ```
 
-**Note:** The `participantIds` parameter is optional but **recommended**. When provided:
-- ✅ Typing indicators appear in the **chat list** (conversation list view)
-- ✅ Users can see activity even when **outside** the conversation
-- ✅ Better UX - know which conversations have active users
+**Important Notes:**
+- **Continuous Emission:** Events are emitted **every 400ms** while typing/recording to keep indicator alive
+- **Auto-timeout:** Indicators auto-disappear after **3-4 seconds** of inactivity
+- **ParticipantIds:** Optional but **highly recommended** for chat list indicators
+  - ✅ With participantIds: Indicators appear in **chat list** (outside conversation)
+  - ❌ Without participantIds: Indicators only appear **inside active chat**
+- **Backend Fallback:** If participantIds not provided, backend fetches from database (slower)
 
+**Behavior:**
+```
+User types → Emits every 400ms → Indicator stays visible
+User stops → Wait 3 seconds → Indicator disappears
+User continues → Indicator immediately reappears
+```
+ 
 ### Server → Client Events
 
 #### 1. New Message
@@ -177,21 +219,34 @@ socket.on("typing", (data) => {
   // {
   //   conversationId: "123",
   //   userId: "user-id",
-  //   isTyping: true,      // User is typing text
-  //   isRecording: false   // User is NOT recording voice
+  //   isTyping: true,        // User is typing text
+  //   isRecording: false     // User is NOT recording voice
   // }
   
   // Handle different states
   if (data.isTyping) {
     // Show "User is typing..." indicator
     // In active chat: show at bottom of messages
-    // In chat list: show next to conversation
+    // In chat list: show next to conversation (💬 Typing...)
   }
   if (data.isRecording) {
     // Show "User is recording..." indicator
     // In active chat: show at bottom of messages
     // In chat list: show "🎙️ Recording..." next to conversation
   }
+  
+  // Note: Indicators auto-disappear after 3-4 seconds if no new events received
+});
+```javascript
+socket.on("typing", (data) => {
+  console.log("Typing indicator:", data);
+  // {
+  //   conversationId: "123",
+  //   userId: "user-uuid-456",
+  //   userName: "John Doe",  // ✨ NEW: User's display name (for group chats)
+  //   isTyping: true,
+  //   isRecording: false
+  // }
 });
 ```
 
@@ -199,10 +254,19 @@ socket.on("typing", (data) => {
 
 **Inside Active Chat:**
 ```javascript
-// Show indicator at bottom of chat
+// Show indicator at bottom of chat with user's name in groups
 if (data.conversationId === currentConversationId) {
-  if (data.isTyping) showTypingIndicator(data.userId);
-  if (data.isRecording) showRecordingIndicator(data.userId);
+  const displayName = data.userName || 'Someone';
+  
+  if (data.isTyping) {
+    showTypingIndicator(`${displayName} is typing...`);
+  }
+  if (data.isRecording) {
+    showRecordingIndicator(`${displayName} is recording...`);
+  }
+  
+  // Auto-clear after 4 seconds (frontend cleanup)
+  setTimeout(() => clearIndicator(), 4000);
 }
 ```
 
@@ -213,12 +277,38 @@ socket.on("typing", (data) => {
   updateConversationIndicator(data.conversationId, {
     isTyping: data.isTyping,
     isRecording: data.isRecording,
-    userId: data.userId
+    userId: data.userId,
+    userName: data.userName,  // ✨ Store userName for display
+    timestamp: Date.now() // Track when received
   });
+  
+  // Display in chat list:
+  // - Group chat: "💬 John is typing..."
+  // - 1-on-1 chat: "💬 Typing..."
+  // - Multiple users: "John and Jane are typing..." or "3 people are typing..."
+  
+  // Frontend cleanup: Remove indicators older than 4 seconds
+  setInterval(() => {
+    cleanupStaleIndicators();
+  }, 1000);
 });
 ```
 
-#### 4. Message Deleted (NEW)
+**Important Notes:**
+- Events are throttled to **max 1 per 400ms** (prevent spam)
+- Backend emits to **2 places**:
+  1. Conversation room (for users inside chat)
+  2. Direct to participants (for chat list)
+- Frontend should cleanup stale indicators (>4 seconds old)
+- Multiple users can be typing/recording simultaneously
+- **`userName` is included** to show who is typing in group chats
+- **Display logic:**
+  - **Group chats**: Show user's name ("John is typing...")
+  - **1-on-1 chats**: Just show action ("Typing...")
+  - **Multiple users (2-3)**: Show names ("John and Jane are typing...")
+  - **Many users (4+)**: Show count ("5 people are typing...")
+
+#### 4. Message Deleted
 ```javascript
 socket.on("message_deleted", (data) => {
   console.log("Message deleted:", data);
@@ -229,7 +319,28 @@ socket.on("message_deleted", (data) => {
 });
 ```
 
-#### 5. Message Reaction (NEW)
+#### 5. Message Edited (NEW) ⭐
+```javascript
+socket.on("message_edited", (data) => {
+  console.log("Message edited:", data);
+  // {
+  //   conversationId: "123",
+  //   message: {
+  //     id: "456",
+  //     content: "Updated message content",
+  //     editedAt: "2024-01-01T00:10:00Z",
+  //     originalContent: "Original message content"
+  //   }
+  // }
+  
+  // Update message in UI
+  updateMessageInList(data.conversationId, data.message);
+});
+```
+
+**Note:** Emitted to all participants when a message is edited. The `editedAt` timestamp indicates when the edit occurred. The `originalContent` field preserves the first version of the message.
+
+#### 6. Message Reaction
 ```javascript
 socket.on("message_reaction", (data) => {
   console.log("Message reaction:", data);
@@ -260,7 +371,7 @@ socket.on("message_reaction_removed", (data) => {
 });
 ```
 
-#### 7. User Online
+#### 9. User Online
 ```javascript
 socket.on("user_online", (data) => {
   console.log("User online:", data);
@@ -271,7 +382,7 @@ socket.on("user_online", (data) => {
 });
 ```
 
-#### 8. User Offline
+#### 10. User Offline
 ```javascript
 socket.on("user_offline", (data) => {
   console.log("User offline:", data);
@@ -282,7 +393,7 @@ socket.on("user_offline", (data) => {
 });
 ```
 
-#### 9. Last Message Update (NEW)
+#### 11. Last Message Update
 ```javascript
 socket.on("last_message_update", (data) => {
   console.log("Last message updated:", data);
@@ -310,7 +421,7 @@ socket.on("last_message_update", (data) => {
 
 **Note:** This event is emitted to all participants whenever a new message is sent. It provides the last message details and the unread count for each participant. This is useful for updating the conversation list outside of the active chat.
 
-#### 10. Conversation Created (NEW)
+#### 12. Conversation Created
 ```javascript
 socket.on("conversation_created", (data) => {
   console.log("New conversation:", data);
@@ -332,7 +443,7 @@ socket.on("conversation_created", (data) => {
 
 **Note:** Emitted when someone creates a new conversation with you or adds you to a group. Automatically appears in your chat list.
 
-#### 11. Conversation Updated (NEW)
+#### 13. Conversation Updated
 ```javascript
 socket.on("conversation_updated", (data) => {
   console.log("Conversation updated:", data);
@@ -354,7 +465,7 @@ socket.on("conversation_updated", (data) => {
 
 **Note:** Emitted when group details change (name, avatar, description). All participants receive this update.
 
-#### 12. Conversation Deleted (NEW)
+#### 14. Conversation Deleted
 ```javascript
 socket.on("conversation_deleted", (data) => {
   console.log("Conversation deleted:", data);
@@ -369,7 +480,7 @@ socket.on("conversation_deleted", (data) => {
 
 **Note:** Emitted when a group is deleted or when you're removed from a conversation. Removes it from your chat list.
 
-#### 13. Participant Added (NEW)
+#### 15. Participant Added
 ```javascript
 socket.on("participant_added", (data) => {
   console.log("Participant added:", data);
@@ -391,7 +502,7 @@ socket.on("participant_added", (data) => {
 
 **Note:** Emitted when a new member is added to a group. All existing participants receive this.
 
-#### 14. Participant Removed (NEW)
+#### 16. Participant Removed
 ```javascript
 socket.on("participant_removed", (data) => {
   console.log("Participant removed:", data);
@@ -826,6 +937,273 @@ Send a text message in a conversation.
 - Message is automatically emitted via Socket.io to all other participants
 - Sender receives the message only through API response (prevents duplication)
 - Supports **optimistic UI** - can display immediately before server confirms
+- Now supports **@mentions** - include mentions array in request body (NEW!)
+
+---
+
+### Send Message with Reply/Quote (NEW) ⭐
+
+Reply to a previous message with quote preview.
+
+**Endpoint:** `POST /api/messages/:conversationId/reply`
+
+**Request Body:**
+```json
+{
+  "content": "Great idea! Let's do it.",
+  "replyToId": "456",
+  "mentions": [
+    {
+      "userId": "uuid-123",
+      "displayName": "John",
+      "offset": 0
+    }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Message sent successfully",
+  "data": {
+    "id": "789",
+    "conversationId": "123",
+    "senderId": "your-user-id",
+    "type": "TEXT",
+    "content": "Great idea! Let's do it.",
+    "mentions": [
+      {
+        "userId": "uuid-123",
+        "displayName": "John",
+        "offset": 0
+      }
+    ],
+    "replyTo": {
+      "id": "456",
+      "content": "Should we meet tomorrow?",
+      "senderId": "uuid-456",
+      "senderName": "Jane Doe"
+    },
+    "createdAt": "2024-01-01T00:00:00Z",
+    "sender": {
+      "id": "your-user-id",
+      "displayName": "Your Name",
+      "avatarUrl": "https://..."
+    }
+  }
+}
+```
+
+**Notes:**
+- **replyToId** is optional - if not provided, sends as regular message
+- **mentions** array is optional - for @mentioning users
+- Reply message must exist in the same conversation
+- Socket emits `new_message` with full reply data
+- Frontend displays quoted message above reply
+
+---
+
+### Edit Message (NEW) ⭐
+
+Edit a previously sent message with history tracking.
+
+**Endpoint:** `PATCH /api/messages/:conversationId/:messageId/edit`
+
+**Request Body:**
+```json
+{
+  "content": "Corrected message text"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Message edited successfully",
+  "data": {
+    "id": "789",
+    "conversationId": "123",
+    "senderId": "your-user-id",
+    "content": "Corrected message text",
+    "editedAt": "2024-01-01T00:10:00Z",
+    "originalContent": "Original message text",
+    "editHistory": [
+      {
+        "content": "Original message text",
+        "editedAt": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "sender": {
+      "id": "your-user-id",
+      "displayName": "Your Name",
+      "avatarUrl": "https://..."
+    }
+  }
+}
+```
+
+**Notes:**
+- **Only the sender** can edit their messages
+- **⏱️ 15-minute limit**: Messages can only be edited within 15 minutes of sending
+- Cannot edit **deleted messages**
+- Original content is preserved in `originalContent`
+- Full edit history tracked in `editHistory` array
+- Socket emits `message_edited` event to all participants
+- Frontend displays **(edited)** indicator
+
+**Error Responses:**
+- `403`: If trying to edit someone else's message
+- `403`: If message is older than 15 minutes
+- `400`: If trying to edit a deleted message
+
+---
+
+### Send Voice Message (NEW) ⭐
+
+Send a voice/audio message recorded from the device.
+
+**Endpoint:** `POST /api/messages/:conversationId/voice`
+
+**Request:** Form-data (multipart/form-data)
+- `voice`: Audio file (required) - Max 15MB
+- `caption`: Optional text caption
+
+**Supported Audio Formats:**
+- WebM (MediaRecorder default)
+- MP3, WAV, OGG (Cloudinary converts)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Voice message sent successfully",
+  "data": {
+    "id": "790",
+    "conversationId": "123",
+    "senderId": "your-user-id",
+    "type": "VOICE",
+    "content": "Voice message",
+    "voiceUrl": "https://cloudinary.com/voice-url.mp3",
+    "voiceDuration": 15,
+    "meta": {
+      "voiceUrl": "https://cloudinary.com/voice-url.mp3",
+      "publicId": "chat/voice/123/user_timestamp",
+      "duration": 15,
+      "resource_type": "video",
+      "format": "mp3"
+    },
+    "createdAt": "2024-01-01T00:00:00Z",
+    "sender": {
+      "id": "your-user-id",
+      "displayName": "Your Name",
+      "avatarUrl": "https://..."
+    }
+  }
+}
+```
+
+**Notes:**
+- Voice files uploaded to Cloudinary under `chat/voice/{conversationId}/`
+- Duration automatically extracted (in seconds)
+- Caption is optional
+- Max file size: **15MB**
+- Frontend displays audio player with play/pause controls
+- Works with browser MediaRecorder API
+
+---
+
+### Search Messages (NEW) ⭐
+
+Search for messages across all your conversations or within a specific conversation.
+
+**Endpoint:** `GET /api/messages/search/messages`
+
+**Query Parameters:**
+- `query` (required): Search query string (2-200 chars)
+- `conversationId` (optional): Limit search to specific conversation
+- `page` (optional): Page number (default: 1)
+- `size` (optional): Items per page (default: 25, max: 50)
+
+**Example:**
+```
+GET /api/messages/search/messages?query=meeting&conversationId=123&page=1&size=25
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "page": 1,
+  "size": 25,
+  "total": 5,
+  "pages": 1,
+  "count": 5,
+  "data": [
+    {
+      "id": "789",
+      "conversationId": "123",
+      "conversation": {
+        "id": "123",
+        "type": "GROUP",
+        "name": "Project Team"
+      },
+      "senderId": "uuid-456",
+      "type": "TEXT",
+      "content": "Meeting tomorrow at 3pm in conference room",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "sender": {
+        "id": "uuid-456",
+        "displayName": "Jane Doe",
+        "avatarUrl": "https://..."
+      }
+    }
+  ]
+}
+```
+
+**Notes:**
+- **Full-text search** using PostgreSQL
+- Case-insensitive fallback search
+- Only searches conversations you're a participant in
+- Excludes deleted messages
+- Returns conversation context with each result
+- Paginated for performance
+- Search query minimum **2 characters**
+
+---
+
+### Send Text Message (Updated)
+
+**Note:** Text message endpoint now supports @mentions!
+
+**Endpoint:** `POST /api/messages/:conversationId/text`
+
+**Request Body:**
+```json
+{
+  "content": "Hey @John, check this out!",
+  "type": "TEXT",
+  "mentions": [
+    {
+      "userId": "uuid-123",
+      "displayName": "John",
+      "offset": 4
+    }
+  ]
+}
+```
+
+**Response:** (same as before, now includes `mentions` field)
+
+---
+
+**Notes:**
+- Message is automatically emitted via Socket.io to all other participants
+- Sender receives the message only through API response (prevents duplication)
+- Supports **optimistic UI** - can display immediately before server confirms
 
 ---
 
@@ -967,6 +1345,21 @@ Get messages for a conversation with pagination and infinite scroll support.
       "type": "TEXT",
       "content": "Message content",
       "meta": null,
+      "mentions": [
+        {
+          "userId": "uuid-123",
+          "displayName": "John",
+          "offset": 4
+        }
+      ],
+      "voiceUrl": null,
+      "voiceDuration": null,
+      "replyTo": {
+        "id": "456",
+        "content": "Original message",
+        "senderId": "uuid-456",
+        "senderName": "Jane Doe"
+      },
       "createdAt": "2024-01-01T00:00:00Z",
       "readAt": null,
       "editedAt": null,
@@ -1000,6 +1393,10 @@ Get messages for a conversation with pagination and infinite scroll support.
 - Pagination parameters are validated (page ≥ 1, size 1-50)
 - **Deleted messages are excluded** from results
 - Messages include **all reactions** with profile info
+- Messages now include **replyTo** data for quoted messages (NEW)
+- Messages include **mentions** array for @mentions (NEW)
+- Messages include **voiceUrl** and **voiceDuration** for voice messages (NEW)
+- Messages include **editedAt** timestamp for edited messages (NEW)
 - Frontend automatically groups messages by date and sender
 
 ---
@@ -1052,6 +1449,7 @@ Delete a message (soft delete - message preserved but marked as deleted).
 
 **Notes:**
 - **Only the sender** can delete their own messages
+- **⏱️ 15-minute limit**: Messages can only be deleted within 15 minutes of sending
 - **Soft delete** - message is marked as deleted but preserved in database
 - Content replaced with "This message was deleted"
 - Automatically emits `message_deleted` event via Socket.io
@@ -1060,6 +1458,7 @@ Delete a message (soft delete - message preserved but marked as deleted).
 
 **Error Responses:**
 - `403`: If trying to delete someone else's message
+- `403`: If message is older than 15 minutes
 - `404`: If message not found or already deleted
 
 ---
@@ -1159,20 +1558,64 @@ Remove your emoji reaction from a message.
 - **Recording:** Shows "**User is recording...**" when `isRecording: true`
 - **Multiple users:** Shows "**3 people are typing...**" or "**2 people are recording...**"
 - **Combined event:** Single `typing` event handles both states
-- **Auto-timeout:** Recommended 3 seconds of inactivity
+- **Continuous:** Emits every **400ms** while active to keep indicator alive
+- **Auto-timeout:** **3-4 seconds** of inactivity before disappearing
 - **Real-time updates** via Socket.io
 - **Flexible:** Can show both indicators simultaneously or separately
-- **Multi-view support:** Works both **inside conversations** and in **chat list** (NEW!)
+- **Multi-view support:** Works both **inside conversations** and in **chat list**
   - Inside chat: Shows indicator at bottom of messages
   - In chat list: Shows indicator next to conversation name
   - Requires `participantIds` parameter for chat list updates
+- **Throttled:** Max 1 event per 400ms to prevent spam
+- **Auto-cleanup:** Frontend removes stale indicators (>4 seconds old)
 
-### Last Message Updates (NEW)
+### Last Message Updates
 - **Real-time conversation list updates** when new messages arrive
 - Automatically updates **last message preview** in conversation list
 - Shows **unread message count** for each conversation
 - Updates even when user is **outside the active chat**
 - Enables **live conversation list** without polling
+
+### Reply/Quote Messages (NEW) ⭐
+- **Quote Preview:** Shows quoted message above reply with blue accent bar
+- **Sender Name:** Displayed in blue above quoted text
+- **Truncated Preview:** Shows first 100 characters of quoted message
+- **Cancel Button:** Remove quote before sending
+- **Click to Reply:** Tap any message to quote and reply
+- **Visual Design:** Light gray background with left border accent
+
+### Edit Messages (NEW) ⭐
+- **Edit Indicator:** Shows "(edited)" text in gray after edited messages
+- **Edit History:** Tracks all versions of edited messages
+- **Only Sender:** Only message sender can edit their own messages
+- **Edit Button:** Pencil icon appears on hover for own messages
+- **Cannot Edit Deleted:** Deleted messages cannot be edited
+- **Real-time Updates:** All participants see edits instantly via Socket.io
+
+### Voice Messages (NEW) ⭐
+- **Voice Player:** Play/pause button with circular design
+- **Progress Bar:** Visual waveform showing playback progress
+- **Duration Display:** Shows current time / total duration (e.g., "0:15 / 0:30")
+- **Recording Interface:** Press and hold microphone button
+- **Recording Indicator:** Pulsing red dot while recording
+- **Duration Counter:** Shows recording time while active
+- **Auto-upload:** Automatically uploads when recording stops
+
+### @Mentions (NEW) ⭐
+- **Autocomplete Dropdown:** Appears when typing "@" symbol
+- **User Suggestions:** Filters participants by display name
+- **Avatar Display:** Shows user avatar in dropdown
+- **Highlighted in Message:** Mentions appear in blue text
+- **Clickable:** Mentions can link to user profile (future feature)
+- **Real-time Suggestions:** Updates as you type
+
+### Message Search (NEW) ⭐
+- **Full-Text Search:** Searches across all conversation content
+- **Conversation Filter:** Optionally limit search to one conversation
+- **Results with Context:** Shows conversation name with each result
+- **Pagination:** Load more results with pagination
+- **Highlighted Matches:** Query terms highlighted in results (future)
+- **Jump to Message:** Click result to view message in context (future)
 
 ---
 
@@ -1297,6 +1740,35 @@ Remove your emoji reaction from a message.
    Body: { "messageIds": ["msg-id-1", "msg-id-2"] }
    ```
 
+9. **Send Message with Reply:**
+   ```
+   POST /api/messages/{conversationId}/reply
+   Body: {
+     "content": "Great idea!",
+     "replyToId": "456",
+     "mentions": [{"userId": "uuid", "displayName": "John", "offset": 0}]
+   }
+   ```
+
+10. **Edit Message:**
+   ```
+   PATCH /api/messages/{conversationId}/{messageId}/edit
+   Body: { "content": "Updated message text" }
+   ```
+
+11. **Send Voice Message:**
+   ```
+   POST /api/messages/{conversationId}/voice
+   Form-data:
+     - voice: [audio file]
+     - caption: "Voice message" (optional)
+   ```
+
+12. **Search Messages:**
+   ```
+   GET /api/messages/search/messages?query=keyword&conversationId=123&page=1
+   ```
+
 #### Group Chat Flow (NEW)
 
 1. **Create Group:**
@@ -1355,6 +1827,7 @@ Remove your emoji reaction from a message.
 - **TEXT**: Plain text messages
 - **IMAGE**: Image files (with optional caption)
 - **FILE**: Document files (PDF, DOC, DOCX, ZIP, RAR)
+- **VOICE**: Audio/voice messages (WebM, MP3, WAV, OGG) ⭐ NEW
 
 ### Message States
 - **Normal**: Active message visible to all
@@ -1371,18 +1844,28 @@ Remove your emoji reaction from a message.
 ### File Storage
 - **Images**: Stored in Cloudinary under `chat/images/{conversationId}/`
 - **Files**: Stored in Cloudinary under `chat/files/{conversationId}/`
+- **Voice Messages**: Stored in Cloudinary under `chat/voice/{conversationId}/` ⭐ NEW
 - **File Size Limits**:
   - Images: 10MB max
   - Files: 15MB max
+  - Voice: 15MB max ⭐ NEW
 
 ### Socket.io Behavior
 - Messages emitted to **all participants except sender**
 - Reactions broadcast to **all participants**
 - Deletions broadcast to **all participants**
+- **Edits broadcast to all participants** via `message_edited` event ⭐ NEW
 - Read receipts emitted when messages marked as read
-- Typing/recording indicators emitted to **all participants except sender**
-- Typing/recording auto-timeout recommended (3 seconds)
+- Typing/recording indicators:
+  - Emitted to **conversation room** (for users inside chat)
+  - Emitted **directly to participants** (for chat list updates)
+  - Throttled to **max 1 per 400ms** to prevent spam
+  - Auto-timeout after **3-4 seconds** of inactivity
 - Last message updates sent to **all participants** with personalized unread counts
+- Connection state managed with `userSocketMap` (userId → Set of socketIds)
+- Supports multiple connections per user (e.g., mobile + desktop)
+- Automatic cleanup on disconnect
+- Online/offline status broadcast to conversation participants
 
 ### Data Models
 - **Conversation IDs**: BigInt (returned as strings)
@@ -1390,6 +1873,9 @@ Remove your emoji reaction from a message.
 - **Reaction IDs**: BigInt (returned as strings)
 - **Pagination**: Messages in reverse chronological order
 - **Soft Deletes**: deletedAt timestamp instead of hard delete
+- **Reply Relations**: Messages can reference other messages via replyToId ⭐ NEW
+- **Edit History**: JSONB array tracking all message edits ⭐ NEW
+- **Mentions**: JSONB array of mentioned users with offsets ⭐ NEW
 
 ### Performance Features
 - **Component memoization**: React.memo for Message components
@@ -1410,7 +1896,21 @@ Remove your emoji reaction from a message.
 
 ## 🔗 Related Documentation
 
-- [Chat Improvements Summary](../docs/CHAT_IMPROVEMENTS_SUMMARY.md) - Technical details of recent upgrades
+- **[NEW! Chat Features Implementation](../docs/CHAT_FEATURES_README.md)** ⭐ 5 NEW FEATURES!
+  - Reply/Quote Messages
+  - Edit Messages
+  - Voice Messages
+  - @Mentions
+  - Message Search
+- [Complete Features Summary](../docs/CHAT_FEATURES_COMPLETE_SUMMARY.md) - Full implementation details
+- [Backend Documentation](../docs/CHAT_FEATURES_BACKEND_COMPLETE.md) - API & Database
+- [Frontend Guide](../docs/CHAT_FEATURES_FRONTEND_GUIDE.md) - React Components
+- [Socket Improvements Guide](../docs/SOCKET_IMPROVEMENTS.md) - Professional Socket.IO enhancements
+- [Typing Indicator Debugging](../chat-client/TYPING_INDICATOR_DEBUG.md) - Debug typing issues
+- [Recording Feature Guide](../chat-client/RECORDING_FEATURE.md) - Recording indicator details
+- [Mobile Improvements](../chat-client/MOBILE_IMPROVEMENTS.md) - Mobile responsive design
+- [Chat Features Added](../chat-client/FEATURES_ADDED.md) - Implementation summary
+- [Chat Improvements Summary](../docs/CHAT_IMPROVEMENTS_SUMMARY.md) - Technical details
 - [Chat Features Quick Reference](../docs/CHAT_FEATURES_QUICK_REFERENCE.md) - Developer quick reference
 - [Authentication](./auth.md) - How to get authentication token
 - [Profiles](./profiles.md) - User profile management
@@ -1444,14 +1944,18 @@ Remove your emoji reaction from a message.
 
 ---
 
-## 🚀 Recent Updates (v3.2)
+## 🚀 Recent Updates (v3.5)
 
-### Latest Features (v3.2)
-- ✅ **Recording Indicator** - Show when users are recording voice messages
+### Latest Features (v3.5)
+- ✅ **Recording Indicator** - Show when users are recording voice messages (🎙️)
+- ✅ **Continuous Indicators** - Typing/recording stay visible while active (emit every 400ms)
+- ✅ **Mobile Responsive** - Full mobile support with slide navigation
+- ✅ **Enhanced Debugging** - Comprehensive console logs for troubleshooting
+- ✅ **Professional Socket.IO** - Security, rate limiting, validation improvements
+- ✅ **Better Performance** - Optimized emission frequency and auto-cleanup
 - ✅ **Last Message Updates** - Real-time conversation list updates with unread counts
-- ✅ **Live Conversation List** - Updates automatically without polling
 
-### Previous Features (v2.0-3.1)
+### Previous Features (v2.0-3.4)
 - ✅ **Message Reactions** - Add emoji reactions to any message
 - ✅ **Delete Messages** - Soft delete your own messages
 - ✅ **Message Grouping** - Automatic grouping by date/sender
@@ -1465,10 +1969,6 @@ Remove your emoji reaction from a message.
 - ✅ **Remove Members** - Remove members or leave group
 - ✅ **Promote to Admin** - Promote trusted members to admin
 - ✅ **Role-Based Permissions** - Admin vs Member roles
-
-### Group Chat Roles
-- **Admin**: Can edit group, add/remove members, promote members
-- **Member**: Can chat, view info, and leave group
 
 ### Breaking Changes
 - None - All changes are backwards compatible
@@ -1596,32 +2096,33 @@ The backend has CORS enabled for all origins. No additional configuration needed
 ## 📝 Socket Events Summary
 
 ### Client → Server Events
-| Event | Purpose | Data |
-|-------|---------|------|
-| `join_conversation` | Join a conversation room | `{ conversationId, userId, participantIds }` |
-| `leave_conversation` | Leave a conversation room | `{ conversationId, userId }` |
-| `typing` | Indicate typing or recording | `{ conversationId, userId, isTyping, isRecording }` |
+| Event | Purpose | Data | Notes |
+|-------|---------|------|-------|
+| `join_conversation` | Join a conversation room | `{ conversationId, userId, participantIds }` | Auto-emit on_online status |
+| `leave_conversation` | Leave a conversation room | `{ conversationId, userId }` | - |
+| `typing` | Indicate typing or recording | `{ conversationId, userId, isTyping, isRecording, participantIds }` | Throttled to 400ms, continuous while active |
 
 ### Server → Client Events
-| Event | Purpose | Data |
-|-------|---------|------|
-| `new_message` | New message received | `{ conversationId, message }` |
-| `messages_read` | Messages marked as read | `{ conversationId, readBy, messageIds }` |
-| `typing` | User typing/recording status | `{ conversationId, userId, isTyping, isRecording }` |
-| `message_deleted` | Message was deleted | `{ conversationId, messageId }` |
-| `message_reaction_added` | Reaction added | `{ conversationId, messageId, reaction }` |
-| `message_reaction_removed` | Reaction removed | `{ conversationId, messageId, reactionId, profileId }` |
-| `user_online` | User came online | `{ userId, conversationId }` |
-| `user_offline` | User went offline | `{ userId, conversationId }` |
-| `last_message_update` | Last message & unread count | `{ conversationId, lastMessage, unreadCount }` |
-| `conversation_created` | New conversation created (NEW) | `{ conversation }` |
-| `conversation_updated` | Conversation details changed (NEW) | `{ conversation }` |
-| `conversation_deleted` | Conversation deleted (NEW) | `{ conversationId }` |
-| `participant_added` | Member added to group (NEW) | `{ conversationId, participant }` |
-| `participant_removed` | Member removed from group (NEW) | `{ conversationId, participantId }` |
+| Event | Purpose | Data | Notes |
+|-------|---------|------|-------|
+| `new_message` | New message received | `{ conversationId, message }` | Excludes sender, includes reply, mentions, voice |
+| `messages_read` | Messages marked as read | `{ conversationId, readBy, messageIds }` | - |
+| `typing` | User typing/recording status | `{ conversationId, userId, isTyping, isRecording }` | Emitted every 400ms while active |
+| `message_deleted` | Message was deleted | `{ conversationId, messageId }` | - |
+| `message_edited` | Message was edited (NEW) | `{ conversationId, message: { id, content, editedAt, originalContent } }` | ⭐ NEW |
+| `message_reaction` | Reaction added | `{ conversationId, messageId, reaction }` | - |
+| `message_reaction_removed` | Reaction removed | `{ conversationId, messageId, reactionId, profileId }` | - |
+| `user_online` | User came online | `{ userId, conversationId }` | - |
+| `user_offline` | User went offline | `{ userId, conversationId }` | - |
+| `last_message_update` | Last message & unread count | `{ conversationId, lastMessage, unreadCount }` | Personalized per user |
+| `conversation_created` | New conversation created | `{ conversation }` | - |
+| `conversation_updated` | Conversation details changed | `{ conversation }` | Group name, avatar, etc. |
+| `conversation_deleted` | Conversation deleted | `{ conversationId }` | - |
+| `participant_added` | Member added to group | `{ conversationId, participant }` | - |
+| `participant_removed` | Member removed from group | `{ conversationId, participantId }` | - |
 
 ---
 
-**Version:** 3.2.0  
-**Last Updated:** January 16, 2026  
+**Version:** 4.0.0  
+**Last Updated:** January 17, 2026  
 **Production URL:** https://done-buddy-production.up.railway.app
