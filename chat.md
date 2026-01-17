@@ -1328,7 +1328,11 @@ Send a voice/audio message recorded from the device.
 
 ---
 
-### Search Messages (NEW) ⭐
+### Advanced Search (NEW) ⭐
+
+Comprehensive search across messages, conversations, and groups with advanced filtering.
+
+#### 1. Search Messages
 
 Search for messages across all your conversations or within a specific conversation.
 
@@ -1337,12 +1341,37 @@ Search for messages across all your conversations or within a specific conversat
 **Query Parameters:**
 - `query` (required): Search query string (2-200 chars)
 - `conversationId` (optional): Limit search to specific conversation
+- `type` (optional): Filter by message type (`TEXT`, `IMAGE`, `FILE`, `VOICE`)
+- `senderId` (optional): Filter by sender user ID
+- `dateFrom` (optional): Start date (ISO 8601 format)
+- `dateTo` (optional): End date (ISO 8601 format)
+- `hasReactions` (optional): Filter messages with reactions (true/false)
+- `hasReplies` (optional): Filter messages that are replies (true/false)
 - `page` (optional): Page number (default: 1)
 - `size` (optional): Items per page (default: 25, max: 50)
 
-**Example:**
+**Examples:**
 ```
-GET /api/messages/search/messages?query=meeting&conversationId=123&page=1&size=25
+# Basic search
+GET /api/messages/search/messages?query=meeting
+
+# Search in specific conversation
+GET /api/messages/search/messages?query=meeting&conversationId=123
+
+# Search by message type
+GET /api/messages/search/messages?query=report&type=FILE
+
+# Search with date range
+GET /api/messages/search/messages?query=presentation&dateFrom=2024-01-01&dateTo=2024-01-31
+
+# Search messages with reactions
+GET /api/messages/search/messages?query=great&hasReactions=true
+
+# Search replies only
+GET /api/messages/search/messages?query=thanks&hasReplies=true
+
+# Combined filters
+GET /api/messages/search/messages?query=project&conversationId=123&type=TEXT&hasReactions=true
 ```
 
 **Response:**
@@ -1361,30 +1390,580 @@ GET /api/messages/search/messages?query=meeting&conversationId=123&page=1&size=2
       "conversation": {
         "id": "123",
         "type": "GROUP",
-        "name": "Project Team"
+        "name": "Project Team",
+        "avatarUrl": "https://..."
       },
       "senderId": "uuid-456",
       "type": "TEXT",
       "content": "Meeting tomorrow at 3pm in conference room",
+      "mentions": [],
+      "replyTo": null,
+      "editedAt": null,
       "createdAt": "2024-01-01T00:00:00Z",
       "sender": {
         "id": "uuid-456",
         "displayName": "Jane Doe",
         "avatarUrl": "https://..."
-      }
+      },
+      "reactions": [
+        {
+          "id": "1",
+          "emoji": "👍",
+          "profileId": "uuid-789"
+        }
+      ]
     }
   ]
 }
 ```
 
-**Notes:**
-- **Full-text search** using PostgreSQL
-- Case-insensitive fallback search
-- Only searches conversations you're a participant in
-- Excludes deleted messages
-- Returns conversation context with each result
-- Paginated for performance
-- Search query minimum **2 characters**
+**Features:**
+- ✅ **Full-text search** using PostgreSQL
+- ✅ **Case-insensitive** search with accent support
+- ✅ **Filter by type** (text, images, files, voice)
+- ✅ **Date range filtering**
+- ✅ **Sender filtering**
+- ✅ **Reaction filtering**
+- ✅ **Reply filtering**
+- ✅ **Conversation context** included
+- ✅ **Only your conversations** (privacy protected)
+- ✅ **Excludes deleted** messages
+- ✅ **Paginated results**
+
+---
+
+#### 2. Search Conversations
+
+Search for conversations and groups by name, participant, or content.
+
+**Endpoint:** `GET /api/conversations/search`
+
+**Query Parameters:**
+- `query` (required): Search query string (2-200 chars)
+- `type` (optional): Filter by type (`DIRECT`, `GROUP`, `CO_SHOPPING`)
+- `hasUnread` (optional): Filter conversations with unread messages (true/false)
+- `page` (optional): Page number (default: 1)
+- `size` (optional): Items per page (default: 25, max: 50)
+
+**Examples:**
+```
+# Search all conversations
+GET /api/conversations/search?query=project
+
+# Search only groups
+GET /api/conversations/search?query=team&type=GROUP
+
+# Search conversations with unread messages
+GET /api/conversations/search?query=john&hasUnread=true
+
+# Search direct chats only
+GET /api/conversations/search?query=sarah&type=DIRECT
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "page": 1,
+  "size": 25,
+  "total": 3,
+  "pages": 1,
+  "count": 3,
+  "data": [
+    {
+      "id": "123",
+      "type": "GROUP",
+      "name": "Project Team",
+      "avatarUrl": "https://...",
+      "description": "Main project discussion",
+      "participantCount": 8,
+      "unreadCount": 3,
+      "lastMessage": {
+        "id": "456",
+        "content": "Last message preview",
+        "type": "TEXT",
+        "senderId": "uuid",
+        "senderName": "John Doe",
+        "createdAt": "2024-01-01T00:00:00Z"
+      },
+      "participants": [
+        {
+          "profileId": "uuid-1",
+          "displayName": "John Doe",
+          "avatarUrl": "https://...",
+          "roleInChat": "admin"
+        }
+      ],
+      "matchedOn": "name" // What field matched: name, description, participant
+    },
+    {
+      "id": "124",
+      "type": "DIRECT",
+      "name": null,
+      "participant": {
+        "id": "uuid-2",
+        "displayName": "Sarah Project Manager",
+        "avatarUrl": "https://...",
+        "role": "USER"
+      },
+      "unreadCount": 0,
+      "lastMessage": {
+        "id": "789",
+        "content": "See you tomorrow",
+        "type": "TEXT",
+        "senderId": "uuid-2",
+        "senderName": "Sarah Project Manager",
+        "createdAt": "2024-01-01T00:00:00Z"
+      },
+      "matchedOn": "participant" // Matched on participant name
+    }
+  ]
+}
+```
+
+**Search Criteria:**
+- ✅ **Group names** - Search by group name
+- ✅ **Group descriptions** - Search in descriptions
+- ✅ **Participant names** - Find chats with specific people
+- ✅ **Direct chat names** - Search by contact display name
+- ✅ **Filter by type** - Groups, direct chats, or co-shopping
+- ✅ **Unread filter** - Find conversations with unread messages
+- ✅ **Match indicator** - Shows what field matched your query
+
+---
+
+#### 3. Search Groups Only
+
+Search specifically for group chats with advanced filtering.
+
+**Endpoint:** `GET /api/conversations/search/groups`
+
+**Query Parameters:**
+- `query` (required): Search query string (2-200 chars)
+- `hasAdmin` (optional): Filter groups where you're admin (true/false)
+- `minMembers` (optional): Minimum number of members
+- `maxMembers` (optional): Maximum number of members
+- `createdAfter` (optional): Created after date (ISO 8601)
+- `page` (optional): Page number (default: 1)
+- `size` (optional): Items per page (default: 25, max: 50)
+
+**Examples:**
+```
+# Search all groups
+GET /api/conversations/search/groups?query=team
+
+# Search groups where you're admin
+GET /api/conversations/search/groups?query=project&hasAdmin=true
+
+# Search groups with 5+ members
+GET /api/conversations/search/groups?query=study&minMembers=5
+
+# Search recently created groups
+GET /api/conversations/search/groups?query=new&createdAfter=2024-01-01
+
+# Large groups only
+GET /api/conversations/search/groups?query=company&minMembers=20&maxMembers=50
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "page": 1,
+  "size": 25,
+  "total": 2,
+  "pages": 1,
+  "count": 2,
+  "data": [
+    {
+      "id": "123",
+      "type": "GROUP",
+      "name": "Project Team Alpha",
+      "avatarUrl": "https://...",
+      "description": "Main project discussion and planning",
+      "createdBy": "uuid-creator",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "participantCount": 12,
+      "adminCount": 2,
+      "yourRole": "admin",
+      "unreadCount": 5,
+      "lastMessage": {
+        "id": "456",
+        "content": "Meeting at 3pm",
+        "type": "TEXT",
+        "senderId": "uuid",
+        "senderName": "John Doe",
+        "createdAt": "2024-01-17T00:00:00Z"
+      },
+      "participants": [
+        {
+          "profileId": "uuid-1",
+          "displayName": "John Doe",
+          "avatarUrl": "https://...",
+          "roleInChat": "admin"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Features:**
+- ✅ **Group-specific search**
+- ✅ **Admin filter** - Find groups you manage
+- ✅ **Member count filter** - Small/large groups
+- ✅ **Creation date filter** - Recent/old groups
+- ✅ **Your role included** - See if you're admin/member
+- ✅ **Admin count** - Number of admins
+- ✅ **Full group details**
+
+---
+
+#### 4. Global Search (All Types)
+
+Search across messages, conversations, and groups in a single request.
+
+**Endpoint:** `GET /api/search/global`
+
+**Query Parameters:**
+- `query` (required): Search query string (2-200 chars)
+- `searchIn` (optional): Comma-separated types to search (`messages`, `conversations`, `groups`)
+- `page` (optional): Page number (default: 1)
+- `size` (optional): Items per page per category (default: 10, max: 25)
+
+**Examples:**
+```
+# Search everything
+GET /api/search/global?query=project
+
+# Search messages and groups only
+GET /api/search/global?query=meeting&searchIn=messages,groups
+
+# Search conversations only
+GET /api/search/global?query=john&searchIn=conversations
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "query": "project",
+  "results": {
+    "messages": {
+      "total": 25,
+      "data": [
+        {
+          "id": "789",
+          "conversationId": "123",
+          "content": "Project deadline is tomorrow",
+          "type": "TEXT",
+          "createdAt": "2024-01-01T00:00:00Z",
+          "sender": {
+            "id": "uuid-456",
+            "displayName": "Jane Doe",
+            "avatarUrl": "https://..."
+          },
+          "conversation": {
+            "id": "123",
+            "type": "GROUP",
+            "name": "Project Team"
+          }
+        }
+      ]
+    },
+    "conversations": {
+      "total": 5,
+      "data": [
+        {
+          "id": "123",
+          "type": "GROUP",
+          "name": "Project Team Alpha",
+          "participantCount": 12,
+          "unreadCount": 3,
+          "matchedOn": "name"
+        },
+        {
+          "id": "124",
+          "type": "DIRECT",
+          "participant": {
+            "displayName": "Project Manager Sarah",
+            "avatarUrl": "https://..."
+          },
+          "matchedOn": "participant"
+        }
+      ]
+    },
+    "groups": {
+      "total": 3,
+      "data": [
+        {
+          "id": "123",
+          "name": "Project Team Alpha",
+          "description": "Main project discussion",
+          "participantCount": 12,
+          "yourRole": "admin",
+          "unreadCount": 3
+        }
+      ]
+    }
+  }
+}
+```
+
+**Features:**
+- ✅ **Unified search** - One query, all results
+- ✅ **Categorized results** - Organized by type
+- ✅ **Totals per category** - Quick overview
+- ✅ **Flexible filtering** - Choose what to search
+- ✅ **Fast performance** - Parallel queries
+- ✅ **Deduplicated** - Groups don't appear in both sections
+
+---
+
+### Search Best Practices
+
+#### Frontend Implementation
+
+```javascript
+class AdvancedSearch {
+  constructor(apiClient) {
+    this.api = apiClient;
+    this.debounceTimer = null;
+  }
+
+  // Debounced search (wait for user to stop typing)
+  async search(query, options = {}) {
+    return new Promise((resolve) => {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = setTimeout(async () => {
+        if (query.length < 2) {
+          resolve({ results: [] });
+          return;
+        }
+
+        try {
+          const results = await this.globalSearch(query, options);
+          resolve(results);
+        } catch (error) {
+          console.error("Search error:", error);
+          resolve({ results: [] });
+        }
+      }, 300); // Wait 300ms after last keystroke
+    });
+  }
+
+  // Global search
+  async globalSearch(query, options = {}) {
+    const params = new URLSearchParams({
+      query,
+      ...options
+    });
+
+    const response = await this.api.get(`/api/search/global?${params}`);
+    return response.data;
+  }
+
+  // Message search with filters
+  async searchMessages(query, filters = {}) {
+    const params = new URLSearchParams({
+      query,
+      ...filters
+    });
+
+    const response = await this.api.get(`/api/messages/search/messages?${params}`);
+    return response.data;
+  }
+
+  // Conversation search
+  async searchConversations(query, filters = {}) {
+    const params = new URLSearchParams({
+      query,
+      ...filters
+    });
+
+    const response = await this.api.get(`/api/conversations/search?${params}`);
+    return response.data;
+  }
+
+  // Group search
+  async searchGroups(query, filters = {}) {
+    const params = new URLSearchParams({
+      query,
+      ...filters
+    });
+
+    const response = await this.api.get(`/api/conversations/search/groups?${params}`);
+    return response.data;
+  }
+}
+
+// Usage example
+const search = new AdvancedSearch(apiClient);
+
+// Search as user types
+searchInput.addEventListener("input", async (e) => {
+  const query = e.target.value;
+  const results = await search.search(query, {
+    searchIn: "messages,conversations,groups"
+  });
+  displayResults(results);
+});
+
+// Advanced message search with filters
+const messageResults = await search.searchMessages("meeting", {
+  conversationId: "123",
+  type: "TEXT",
+  dateFrom: "2024-01-01",
+  hasReactions: true
+});
+
+// Search groups where you're admin
+const adminGroups = await search.searchGroups("project", {
+  hasAdmin: true,
+  minMembers: 5
+});
+```
+
+#### Search UI Components
+
+```javascript
+// Search Results Component
+function SearchResults({ results }) {
+  return (
+    <div className="search-results">
+      {/* Messages Section */}
+      {results.messages?.total > 0 && (
+        <section className="search-section">
+          <h3>Messages ({results.messages.total})</h3>
+          {results.messages.data.map(message => (
+            <MessageResult 
+              key={message.id}
+              message={message}
+              onSelect={() => jumpToMessage(message)}
+            />
+          ))}
+        </section>
+      )}
+
+      {/* Conversations Section */}
+      {results.conversations?.total > 0 && (
+        <section className="search-section">
+          <h3>Conversations ({results.conversations.total})</h3>
+          {results.conversations.data.map(conv => (
+            <ConversationResult
+              key={conv.id}
+              conversation={conv}
+              onSelect={() => openConversation(conv.id)}
+            />
+          ))}
+        </section>
+      )}
+
+      {/* Groups Section */}
+      {results.groups?.total > 0 && (
+        <section className="search-section">
+          <h3>Groups ({results.groups.total})</h3>
+          {results.groups.data.map(group => (
+            <GroupResult
+              key={group.id}
+              group={group}
+              onSelect={() => openGroup(group.id)}
+            />
+          ))}
+        </section>
+      )}
+    </div>
+  );
+}
+```
+
+#### Advanced Filter UI
+
+```javascript
+function SearchFilters({ filters, onChange }) {
+  return (
+    <div className="search-filters">
+      {/* Search Type */}
+      <select 
+        value={filters.searchIn} 
+        onChange={(e) => onChange({ searchIn: e.target.value })}
+      >
+        <option value="messages,conversations,groups">All</option>
+        <option value="messages">Messages Only</option>
+        <option value="conversations">Conversations Only</option>
+        <option value="groups">Groups Only</option>
+      </select>
+
+      {/* Message Type Filter (if searching messages) */}
+      {filters.searchIn.includes("messages") && (
+        <select 
+          value={filters.type} 
+          onChange={(e) => onChange({ type: e.target.value })}
+        >
+          <option value="">All Types</option>
+          <option value="TEXT">Text</option>
+          <option value="IMAGE">Images</option>
+          <option value="FILE">Files</option>
+          <option value="VOICE">Voice</option>
+        </select>
+      )}
+
+      {/* Date Range Filter */}
+      <input 
+        type="date" 
+        value={filters.dateFrom}
+        onChange={(e) => onChange({ dateFrom: e.target.value })}
+        placeholder="From Date"
+      />
+      <input 
+        type="date" 
+        value={filters.dateTo}
+        onChange={(e) => onChange({ dateTo: e.target.value })}
+        placeholder="To Date"
+      />
+
+      {/* Additional Filters */}
+      <label>
+        <input 
+          type="checkbox" 
+          checked={filters.hasReactions}
+          onChange={(e) => onChange({ hasReactions: e.target.checked })}
+        />
+        Has Reactions
+      </label>
+
+      <label>
+        <input 
+          type="checkbox" 
+          checked={filters.hasUnread}
+          onChange={(e) => onChange({ hasUnread: e.target.checked })}
+        />
+        Unread Only
+      </label>
+    </div>
+  );
+}
+```
+
+### Search Performance Tips
+
+1. **Debounce Input**: Wait 300ms after typing stops before searching
+2. **Minimum Query Length**: Require at least 2 characters
+3. **Limit Results**: Use pagination (max 50 per page)
+4. **Cache Results**: Cache recent searches for 5 minutes
+5. **Progressive Loading**: Load messages first, then conversations
+6. **Index Optimization**: Backend uses PostgreSQL full-text search indexes
+7. **Parallel Queries**: Global search runs queries in parallel
+
+### Search Notes
+
+- ✅ All searches respect **privacy** - only your conversations
+- ✅ **Case-insensitive** and **accent-insensitive** search
+- ✅ **Soft-deleted messages** excluded from results
+- ✅ **Full-text indexes** for optimal performance
+- ✅ **Pagination** for large result sets
+- ✅ **Context included** - conversation info with messages
+- ✅ **Match indicators** - shows why results matched
 
 ---
 
