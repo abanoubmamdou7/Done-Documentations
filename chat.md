@@ -2292,7 +2292,7 @@ Add an emoji reaction to a message.
 - Supports any emoji (1-10 characters)
 - Quick emojis in UI: 👍 ❤️ 😂 😮 😢 🙏
 - **One emoji per user per message** - duplicate reactions update existing
-- Automatically emits `message_reaction` event via Socket.io
+- Automatically emits `message_reaction_added` event via Socket.io
 - Reactions grouped by emoji with counts
 - Click your own reaction to remove it
 - Hover reactions to see who reacted
@@ -2667,7 +2667,7 @@ Remove your emoji reaction from a message.
 **⚠️ Correct Event Names to Use:**
 - ✅ `message_reaction_added` - When a reaction is added
 - ✅ `message_reaction_removed` - When a reaction is removed
-- ❌ `message_reaction` - **NOT USED** (old/incorrect name)
+- ❌ `message_reaction` - **DEPRECATED** (use `message_reaction_added` instead)
 
 **All Socket Events:**
 ```javascript
@@ -3229,7 +3229,7 @@ socket.on("reconnect", () => {
 #### ❌ Pitfall 4: Using Wrong Event Names
 ```javascript
 // BAD - wrong event name (old/incorrect)
-socket.on("message_reaction", (data) => {
+socket.on("message_reaction_added", (data) => {
   updateReaction(data);
 });
 
