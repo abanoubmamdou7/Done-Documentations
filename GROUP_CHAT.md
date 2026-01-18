@@ -13,6 +13,7 @@ Added full group chat support with the ability to create groups, manage particip
 - ✅ **Real-time Updates** - All changes broadcast via Socket.IO
 - ✅ **Leave Group** - Any member can leave at any time
 - ✅ **Auto-delete** - Group deleted when last member leaves
+- ✅ **@Mentions** - Tag specific members to get their attention ⭐ NEW
 
 ## Database Changes
 
@@ -305,6 +306,423 @@ socket.emit("typing", {
 5. **Member Changes** - Instant updates when members join/leave
 6. **Group Updates** - Name/avatar changes appear immediately
 7. **Last Message** - Chat list updates with latest message and unread counts
+8. **@Mentions** - Tag specific members in messages ⭐ NEW
+
+### 7. @Mentions in Groups ⭐ NEW
+
+Tag specific members in group messages to get their attention.
+
+#### Sending Messages with Mentions
+
+**Endpoint:** `POST /api/messages/:conversationId/text`
+
+```javascript
+// Send message with @mentions
+const response = await fetch(`/api/messages/123/text`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'authorization': token
+  },
+  body: JSON.stringify({
+    content: "Hey @John and @Sarah, check out this report!",
+    mentions: [
+      {
+        userId: "uuid-john-123",
+        displayName: "John",
+        offset: 4  // Position in text where @John starts
+      },
+      {
+        userId: "uuid-sarah-456",
+        displayName: "Sarah",
+        offset: 14  // Position in text where @Sarah starts
+      }
+    ]
+  })
+});
+```
+
+**Also works with replies:**
+
+```javascript
+// Send reply with mentions
+POST /api/messages/123/reply
+{
+  "content": "Great idea @John! Let's schedule it.",
+  "replyToId": "456",
+  "mentions": [
+    {
+      "userId": "uuid-john-123",
+      "displayName": "John",
+      "offset": 11
+    }
+  ]
+}
+```
+
+#### Socket Event: new_message (includes mentions)
+
+```javascript
+socket.on("new_message", (data) => {
+  console.log("Message received:", data);
+  // {
+  //   conversationId: "123",
+  //   message: {
+  //     id: "789",
+  //     content: "Hey @John and @Sarah, check out this report!",
+  //     senderId: "uuid-alice",
+  //     mentions: [
+  //       { userId: "uuid-john-123", displayName: "John", offset: 4 },
+  //       { userId: "uuid-sarah-456", displayName: "Sarah", offset: 14 }
+  //     ],
+  //     sender: {
+  //       id: "uuid-alice",
+  //       displayName: "Alice",
+  //       avatarUrl: "https://..."
+  //     }
+  //   }
+  // }
+
+  // Check if current user was mentioned
+  const wasMentioned = data.message.mentions?.some(
+    m => m.userId === currentUserId
+  );
+
+  if (wasMentioned) {
+    // Highlight message
+    highlightMentionedMessage(data.message);
+    
+    // Show notification
+    showMentionNotification(data.message);
+    
+    // Play sound
+    playNotificationSound();
+  }
+});
+```
+
+#### Frontend Implementation
+
+**1. Mention Autocomplete**
+
+```javascript
+function MessageInput({ conversation, onSend }) {
+  const [message, setMessage] = useState('');
+  const [mentions, setMentions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    
+    setMessage(value);
+
+    // Detect @ symbol
+    const lastAt = value.lastIndexOf('@', cursorPos);
+    if (lastAt !== -1 && lastAt < cursorPos) {
+      const query = value.substring(lastAt + 1, cursorPos);
+      
+      // Filter participants by query
+      const filtered = conversation.participants
+        .filter(p => p.profileId !== currentUserId)
+        .filter(p => p.displayName.toLowerCase().includes(query.toLowerCase()));
+      
+      if (filtered.length > 0) {
+        setSuggestions(filtered);
+        setShowSuggestions(true);
+      }
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const selectMention = (participant) => {
+    // Insert mention at cursor position
+    const before = message.substring(0, mentionStart);
+    const after = message.substring(cursorPos);
+    const newMessage = `${before}@${participant.displayName} ${after}`;
+    
+    setMessage(newMessage);
+    setMentions([...mentions, {
+      userId: participant.profileId,
+      displayName: participant.displayName,
+      offset: mentionStart,
+    }]);
+    setShowSuggestions(false);
+  };
+
+  return (
+    <div className="message-input">
+      <textarea
+        value={message}
+        onChange={handleInputChange}
+        placeholder="Type @ to mention someone..."
+      />
+      {showSuggestions && (
+        <div className="mention-suggestions">
+          {suggestions.map(p => (
+            <div key={p.profileId} onClick={() => selectMention(p)}>
+              <img src={p.avatarUrl} alt={p.displayName} />
+              <span>{p.displayName}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+**2. Highlight Mentioned Messages**
+
+```javascript
+function MessageBubble({ message, currentUserId }) {
+  const isMentioned = message.mentions?.some(m => m.userId === currentUserId);
+  
+  // Highlight mentions in text
+  const highlightMentions = (content, mentions) => {
+    if (!mentions || mentions.length === 0) return content;
+    
+    let result = content;
+    mentions.forEach(mention => {
+      const mentionText = `@${mention.displayName}`;
+      const isSelf = mention.userId === currentUserId;
+      result = result.replace(
+        mentionText,
+        `<span class="mention ${isSelf ? 'mention-me' : ''}">${mentionText}</span>`
+      );
+    });
+    
+    return result;
+  };
+
+  return (
+    <div className={`message-bubble ${isMentioned ? 'mentioned-message' : ''}`}>
+      {/* Sender name (for group chats) */}
+      <div className="message-sender">{message.sender.displayName}</div>
+      
+      {/* Message content with highlighted mentions */}
+      <div 
+        className="message-content"
+        dangerouslySetInnerHTML={{
+          __html: highlightMentions(message.content, message.mentions)
+        }}
+      />
+      
+      {/* Mention indicator */}
+      {isMentioned && (
+        <div className="mention-indicator">
+          <i className="icon-at"></i> You were mentioned
+        </div>
+      )}
+      
+      {/* Timestamp */}
+      <div className="message-time">{formatTime(message.createdAt)}</div>
+    </div>
+  );
+}
+```
+
+**3. Mention Badge in Chat List**
+
+```javascript
+function ConversationListItem({ conversation, currentUserId }) {
+  const [unreadMentions, setUnreadMentions] = useState(0);
+
+  useEffect(() => {
+    // Listen for new messages
+    socket.on("new_message", (data) => {
+      if (data.conversationId === conversation.id) {
+        // Check if mentioned
+        const mentioned = data.message.mentions?.some(
+          m => m.userId === currentUserId
+        );
+        if (mentioned && data.message.senderId !== currentUserId) {
+          setUnreadMentions(prev => prev + 1);
+        }
+      }
+    });
+
+    return () => socket.off("new_message");
+  }, [conversation.id, currentUserId]);
+
+  return (
+    <div className="conversation-item">
+      <img src={conversation.avatarUrl} alt={conversation.name} />
+      <div className="conversation-info">
+        <h4>{conversation.name}</h4>
+        <p>{conversation.lastMessage}</p>
+      </div>
+      
+      {/* Badges */}
+      <div className="badges">
+        {/* Unread count */}
+        {conversation.unreadCount > 0 && (
+          <span className="badge unread">{conversation.unreadCount}</span>
+        )}
+        
+        {/* Mention badge */}
+        {unreadMentions > 0 && (
+          <span className="badge mention">@{unreadMentions}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+**4. Mention Notification**
+
+```javascript
+function showMentionNotification(message) {
+  // Browser notification
+  if (Notification.permission === "granted") {
+    const notification = new Notification(
+      `${message.sender.displayName} mentioned you`,
+      {
+        body: message.content.substring(0, 100),
+        icon: message.sender.avatarUrl,
+        tag: `mention-${message.id}`,
+      }
+    );
+    
+    notification.onclick = () => {
+      // Navigate to conversation
+      window.location.href = `/chat/${message.conversationId}`;
+    };
+  }
+  
+  // In-app toast
+  showToast({
+    title: `${message.sender.displayName} mentioned you`,
+    message: message.content.substring(0, 50) + '...',
+    type: 'mention',
+    duration: 5000,
+  });
+}
+```
+
+#### Mention Features
+
+**Current Implementation:**
+- ✅ Database support (mentions JSONB field)
+- ✅ API accepts mentions array in message body
+- ✅ Socket.io includes mentions in `new_message` event
+- ✅ Validation for mention structure
+- ✅ Works with text messages and replies
+
+**Frontend Recommendations:**
+- 🎯 Autocomplete dropdown when typing @
+- 🎯 Highlight @mentions in blue
+- 🎯 Yellow background for messages where you're mentioned
+- 🎯 Special badge for unread mentions (@3)
+- 🎯 Browser/push notifications for mentions
+- 🎯 Jump to message when clicking mention notification
+
+**Usage Tips:**
+1. **Always include `participantIds`** - Filter only group members
+2. **Calculate offset correctly** - Position where @name starts in text
+3. **Remove duplicates** - Same user mentioned multiple times
+4. **Validate mentions** - Ensure mentioned users are group members
+5. **Highlight appropriately** - Visual distinction for own mentions
+
+#### CSS Styling Example
+
+```css
+/* Highlighted mention */
+.mention {
+  color: #2563eb;
+  font-weight: 600;
+  background-color: rgba(37, 99, 235, 0.1);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+/* When YOU are mentioned */
+.mention-me {
+  color: #059669;
+  background-color: rgba(5, 150, 105, 0.15);
+}
+
+/* Message where you're mentioned */
+.mentioned-message {
+  background-color: rgba(251, 191, 36, 0.1);
+  border-left: 3px solid #f59e0b;
+  padding-left: 12px;
+}
+
+/* Mention indicator */
+.mention-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* Mention badge in chat list */
+.badge.mention {
+  background-color: #f59e0b;
+  color: white;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+/* Mention suggestions dropdown */
+.mention-suggestions {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.1);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.suggestion-item:hover {
+  background-color: #f3f4f6;
+}
+
+.suggestion-item img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+```
+
+#### API Endpoints
+
+**Currently Available:**
+- `POST /api/messages/:conversationId/text` - Send with mentions
+- `POST /api/messages/:conversationId/reply` - Reply with mentions
+- `GET /api/messages/:conversationId` - Fetch messages (includes mentions)
+- `GET /api/messages/search/messages` - Search messages (mentions included)
+
+**Recommended to Add:**
+- `GET /api/messages/mentions` - Get messages where you were mentioned
+- `GET /api/messages/mentions/count` - Unread mention count
+- `PATCH /api/messages/mentions/:messageId/read` - Mark mention as read
+
+See: `docs/chat/MENTIONS_IMPLEMENTATION_GUIDE.md` for complete implementation details.
+
+---
 
 ### Multiple Typing Users in Groups
 
