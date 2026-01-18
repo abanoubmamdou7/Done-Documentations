@@ -131,11 +131,24 @@ npx prisma db push
 - If last member leaves, **group is deleted**
 - **Emits:** `participant_removed` socket event to all participants
 
-### 8. **Promote Member to Admin** (Admin Only)
+### 8. **Promote Member to Admin** (Admin Only) ✅
 - **Endpoint:** `PATCH /api/conversations/:conversationId/participants/:participantId/promote`
 - Promotes a member to admin role
 - Groups can have **multiple admins**
-- **Emits:** Socket event notifying all participants
+- **Emits:** `participant_promoted` socket event to all participants
+- **Response:**
+  ```json
+  {
+    "success": true,
+    "message": "Participant promoted to admin successfully",
+    "data": {
+      "profileId": "user-id",
+      "displayName": "User Name",
+      "avatarUrl": "https://...",
+      "roleInChat": "admin"
+    }
+  }
+  ```
 
 ## 📡 Socket.IO Events for Groups
 
@@ -232,7 +245,55 @@ socket.on("participant_removed", (data) => {
 });
 ```
 
-#### 5. **conversation_deleted**
+#### 5. **participant_promoted** ✅
+Emitted when a member is promoted to admin role.
+
+**Implementation Status:** ✅ **FULLY IMPLEMENTED**
+
+```javascript
+socket.on("participant_promoted", (data) => {
+  console.log("Member promoted:", data);
+  // {
+  //   conversationId: "123",
+  //   participant: {
+  //     profileId: "user-id",
+  //     displayName: "User Name",
+  //     avatarUrl: "https://...",
+  //     roleInChat: "admin"
+  //   }
+  // }
+  
+  // Update participant role in conversation
+  updateParticipantRole(data.conversationId, data.participant.profileId, "admin");
+  
+  // If it's you, show notification
+  if (data.participant.profileId === currentUserId) {
+    showNotification("You've been promoted to admin! 👑", "success");
+    // Enable admin features in UI
+    enableAdminFeatures(data.conversationId);
+    // Refresh conversation to get updated permissions
+    refreshConversation(data.conversationId);
+  } else {
+    // Someone else was promoted
+    showChatNotification(
+      data.conversationId,
+      `${data.participant.displayName} is now an admin 👑`
+    );
+  }
+});
+```
+
+**Who Receives It:**
+- ✅ All group members (including the promoted member)
+- ✅ Promotes member sees "You've been promoted to admin!"
+- ✅ Other members see "[Name] is now an admin"
+
+**Backend Implementation:**
+- File: `src/modules/chat/controller/conversation.controller.js`
+- Function: `promoteToAdmin()` (Lines ~726-789)
+- Socket Function: `services/socket.io.js` - `emitParticipantPromoted()` (Lines 312-319)
+
+#### 6. **conversation_deleted**
 Emitted when the group is deleted (last member leaves).
 
 ```javascript
@@ -247,7 +308,7 @@ socket.on("conversation_deleted", (data) => {
 });
 ```
 
-#### 6. **typing** (with userName for groups)
+#### 7. **typing** (with userName for groups)
 Shows who is typing in group chats.
 
 ```javascript
@@ -852,6 +913,7 @@ function updateTypingIndicator(typingUsers) {
    - Member gains all admin permissions
    - Groups can have multiple admins
    - Cannot demote admins (not implemented)
+   - **Socket Event:** `participant_promoted` to all participants
 
 ### 5. **Leave Group** (Any Member)
    - Click "Leave Group" in settings
@@ -1030,6 +1092,7 @@ model Conversation {
 - [ ] Listen to `conversation_deleted` event
 - [ ] Listen to `participant_added` event
 - [ ] Listen to `participant_removed` event
+- [ ] Listen to `participant_promoted` event
 - [ ] Emit `join_conversation` when opening group
 - [ ] Emit `typing` with `userName` and `participantIds`
 - [ ] Update UI immediately on socket events
@@ -1086,10 +1149,12 @@ model Conversation {
 #### Test 6: Promote to Admin
 1. **Promote a member** to admin
 2. **Verify:**
+   - ✅ All participants receive `participant_promoted` event
    - ✅ Member's role changes to "admin"
    - ✅ Member can now access admin features
    - ✅ Member can add/remove participants
    - ✅ Member can update group details
+   - ✅ Promoted member sees notification
 
 #### Test 7: Remove Member (Admin)
 1. **Remove a member** from group
@@ -1146,6 +1211,10 @@ socket.on("participant_added", (data) => {
 
 socket.on("participant_removed", (data) => {
   console.log("✅ Member removed:", data);
+});
+
+socket.on("participant_promoted", (data) => {
+  console.log("✅ Member promoted:", data);
 });
 
 socket.on("conversation_deleted", (data) => {
