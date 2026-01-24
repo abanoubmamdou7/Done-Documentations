@@ -14,6 +14,7 @@ This folder contains all Postman API documentation files organized by module.
 - **[products.md](./products.md)** - Products API documentation
 - **[products-quick-reference.md](./products-quick-reference.md)** - Quick reference for Products API
 - **[profiles.md](./profiles.md)** - User profile management APIs
+- **[shopify-checkout.md](./shopify-checkout.md)** - Shopify checkout flow (Cart, Checkout, Payment, Webhooks)
 
 ### Social Module
 
@@ -28,6 +29,7 @@ This folder contains all Postman API documentation files organized by module.
 - **[social-new-features.md](./social-new-features.md)** - New social features documentation
 - **[social-quick-reference.md](./social-quick-reference.md)** - Quick reference guide
 - **[social-testing-guide.md](./social-testing-guide.md)** - Testing guide for social features
+- **[privacy-groups.md](./privacy-groups.md)** - Privacy Groups API (custom privacy settings for posts, reels, and stories)
 
 ## 🚀 Quick Start
 

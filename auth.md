@@ -6,8 +6,9 @@ This document provides API documentation for the integrated Firebase Cloud Messa
 1. [Overview](#overview)
 2. [Login with FCM Token](#login-with-fcm-token)
 3. [Logout with FCM Token](#logout-with-fcm-token)
-4. [Profile Settings - Notification Toggle](#profile-settings---notification-toggle)
-5. [Best Practices](#best-practices)
+4. [Change Password](#change-password)
+5. [Profile Settings - Notification Toggle](#profile-settings---notification-toggle)
+6. [Best Practices](#best-practices)
 
 ---
 
@@ -212,7 +213,123 @@ Content-Type: application/json
 
 ---
 
-## 3. Profile Settings - Notification Toggle
+## 4. Change Password
+
+**POST** `/api/auth/change-password`
+
+**Description:** Allows authenticated users to change their password. Requires the current password for verification, and both new password and confirmation must match.
+
+**Headers:**
+```
+Authorization: <token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "currentPassword": "oldPassword123",
+  "newPassword": "newSecurePassword456",
+  "confirmNewPassword": "newSecurePassword456"
+}
+```
+
+**Request Body Fields:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| currentPassword | String | Yes | User's current password (for verification) |
+| newPassword | String | Yes | New password (minimum 8 characters) |
+| confirmNewPassword | String | Yes | Must match newPassword exactly |
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Password changed successfully"
+}
+```
+
+**Error Responses:**
+
+**401 Unauthorized - Incorrect Current Password:**
+```json
+{
+  "message": "Current password is incorrect",
+  "status_code": 401,
+  "error": {}
+}
+```
+
+**400 Bad Request - New Password Same as Current:**
+```json
+{
+  "message": "New password must be different from current password",
+  "status_code": 400,
+  "error": {}
+}
+```
+
+**400 Bad Request - Validation Error:**
+```json
+{
+  "message": "New password and confirm password must match",
+  "status_code": 400,
+  "error": {}
+}
+```
+
+**401 Unauthorized - Missing Token:**
+```json
+{
+  "message": "Authorization is required",
+  "status_code": 401,
+  "error": {}
+}
+```
+
+**Notes:**
+- ✅ Requires authentication (valid JWT token)
+- ✅ Works for all user roles (USER, SELLER, MEDIATOR)
+- ✅ Current password is verified before allowing change
+- ✅ New password must be different from current password
+- ✅ New password and confirm password must match exactly
+- ✅ Minimum password length: 8 characters
+- ✅ Password is securely hashed using bcrypt before storage
+
+**Example Request:**
+```json
+POST /api/auth/change-password
+Authorization: Bearer <your-jwt-token>
+Content-Type: application/json
+
+{
+  "currentPassword": "MyOldPassword123!",
+  "newPassword": "MyNewSecurePassword456!",
+  "confirmNewPassword": "MyNewSecurePassword456!"
+}
+```
+
+**Example cURL:**
+```bash
+curl -X POST "http://localhost:3000/api/auth/change-password" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "currentPassword": "oldPassword123",
+    "newPassword": "newPassword456",
+    "confirmNewPassword": "newPassword456"
+  }'
+```
+
+**Security Features:**
+- 🔒 Current password verification prevents unauthorized changes
+- 🔒 Password hashing using bcrypt with configurable salt rounds
+- 🔒 Validation ensures new password is different from current
+- 🔒 Confirmation field prevents typos in new password
+
+---
+
+## 5. Profile Settings - Notification Toggle
 
 **PATCH** `/api/profile/settings`
 
@@ -321,7 +438,22 @@ Content-Type: application/json
 5. No more notifications sent to that device
 ```
 
-### 3. Notification Toggle Flow
+### 3. Change Password Flow
+```
+1. User goes to Settings > Change Password
+2. User enters current password
+3. User enters new password
+4. User confirms new password
+5. Frontend validates passwords match
+6. Send POST /api/auth/change-password
+7. Backend verifies current password
+8. Backend checks new password is different
+9. Backend hashes and updates password
+10. User receives success message
+11. User can now login with new password
+```
+
+### 4. Notification Toggle Flow
 ```
 Scenario A: User wants to disable notifications
 1. User goes to Settings
@@ -339,18 +471,18 @@ Scenario B: User wants to enable notifications
 6. User receives notifications
 ```
 
-### 4. Multi-Device Support
+### 5. Multi-Device Support
 - Each device has its own FCM token
 - Register token on login for each device
 - Unregister token on logout for that specific device
 - User can have multiple devices registered simultaneously
 
-### 5. Token Lifecycle
+### 6. Token Lifecycle
 - **Token Changes:** FCM tokens can change (app reinstall, OS update)
 - **Handle Changes:** Re-register token when it changes
 - **Automatic Cleanup:** Invalid tokens are automatically removed by Firebase
 
-### 6. Error Handling
+### 7. Error Handling
 - All FCM operations are **non-blocking**
 - Login/logout succeed even if token operations fail
 - Log errors for debugging but don't block user flow
@@ -427,6 +559,19 @@ Content-Type: application/json
 {
   "notificationsEnabled": true,
   "fcmToken": "{{fcmToken}}"
+}
+```
+
+### Change Password
+```
+POST {{baseUrl}}/api/auth/change-password
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "currentPassword": "oldPassword123",
+  "newPassword": "newPassword456",
+  "confirmNewPassword": "newPassword456"
 }
 ```
 
