@@ -37,6 +37,8 @@ Privacy Groups allow users to create custom groups of friends (e.g., "Family", "
 7. [Remove Member from Group](#7-remove-member-from-group)
 8. [Using Privacy Groups with Posts](#using-privacy-groups-with-posts)
 9. [Using Privacy Groups with Stories](#using-privacy-groups-with-stories)
+10. [Frontend Integration](#frontend-integration)
+11. [Postman Collection](#postman-collection)
 
 ---
 
@@ -606,3 +608,148 @@ privacyGroupId: 550e8400-e29b-41d4-a716-446655440000
 - When a privacy group is deleted, posts/stories using it will have their `privacyGroupId` set to null
 - Privacy settings are enforced at the API level for security
 - The system automatically filters content based on privacy settings in feeds
+
+---
+
+## Frontend Integration
+
+### PrivacyGroupDropdown Component
+
+A reusable React component has been created for selecting post/story visibility with support for custom privacy groups.
+
+**Location:** `chat-client/src/components/PrivacyGroupDropdown.jsx`
+
+**Features:**
+- Displays standard privacy options: **Public**, **Followers**, **Private**
+- Shows custom privacy group names instead of "Custom"
+- Automatically fetches user's privacy groups
+- Easy to integrate into post/story creation forms
+
+**Usage Example:**
+```jsx
+import PrivacyGroupDropdown from './components/PrivacyGroupDropdown';
+import { useState } from 'react';
+
+function PostCreationForm() {
+  const [privacy, setPrivacy] = useState({
+    visibility: 'PUBLIC',
+    privacyGroupId: null,
+  });
+
+  const handleSubmit = async () => {
+    const postData = {
+      caption: 'My post',
+      visibility: privacy.visibility,
+      privacyGroupId: privacy.privacyGroupId, // Required if visibility is 'CUSTOM'
+    };
+    // ... submit to API
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Privacy
+        </label>
+        <PrivacyGroupDropdown
+          value={privacy}
+          onChange={setPrivacy}
+        />
+      </div>
+      <button type="submit">Create Post</button>
+    </form>
+  );
+}
+```
+
+**Component Props:**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `{ visibility: string, privacyGroupId: string \| null }` | `null` | Current selected privacy setting |
+| `onChange` | `(value) => void` | **Required** | Callback when selection changes |
+| `className` | `string` | `''` | Additional CSS classes for the container |
+| `disabled` | `boolean` | `false` | Disable the dropdown |
+
+**Value Format:**
+```javascript
+{
+  visibility: 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE' | 'CUSTOM',
+  privacyGroupId: string | null  // Required when visibility is 'CUSTOM'
+}
+```
+
+**Frontend API Methods:**
+The component uses the `privacyGroupAPI` from `chat-client/src/utils/api.js`:
+
+```javascript
+import { privacyGroupAPI } from '../utils/api';
+
+// Get all privacy groups
+const groups = await privacyGroupAPI.getAll();
+
+// Create a privacy group
+const newGroup = await privacyGroupAPI.create('Family', 'Description', []);
+
+// Update a privacy group
+await privacyGroupAPI.update(groupId, { name: 'Updated Name' });
+
+// Add members to group
+await privacyGroupAPI.addMembers(groupId, [memberId1, memberId2]);
+
+// Remove member from group
+await privacyGroupAPI.removeMember(groupId, memberId);
+
+// Delete privacy group
+await privacyGroupAPI.delete(groupId);
+```
+
+For detailed frontend usage, see: `chat-client/PRIVACY_GROUP_DROPDOWN_USAGE.md`
+
+---
+
+## Postman Collection
+
+A comprehensive Postman collection is available for testing all privacy groups and post visibility endpoints.
+
+**Location:** `docs/features/Privacy_Groups_Postman_Collection.json`
+
+**Collection Includes:**
+
+1. **Privacy Groups** (7 endpoints)
+   - Get All Privacy Groups
+   - Get Single Privacy Group
+   - Create Privacy Group
+   - Update Privacy Group
+   - Add Members to Privacy Group
+   - Remove Member from Privacy Group
+   - Delete Privacy Group
+
+2. **Posts with Visibility** (8 endpoints)
+   - Create Post - PUBLIC
+   - Create Post - FOLLOWERS
+   - Create Post - PRIVATE
+   - Create Post - CUSTOM (Privacy Group)
+   - Update Post Visibility
+   - Update Post to CUSTOM Visibility
+   - Get Post Feed
+   - Get Single Post
+
+3. **Stories with Visibility** (2 endpoints)
+   - Create Story - PUBLIC
+   - Create Story - CUSTOM (Privacy Group)
+
+**Collection Variables:**
+- `baseUrl` - Default: `http://localhost:3000`
+- `token` - JWT token (set after login)
+- `privacyGroupId` - Privacy group ID (from create/get responses)
+- `postId` - Post ID (from create response)
+- `memberId` - Profile ID for adding/removing members
+
+**How to Use:**
+1. Import the collection into Postman
+2. Set the `token` variable (get it from `/api/auth/login`)
+3. Create a privacy group and save the `privacyGroupId` variable
+4. Test post creation with different visibility options
+5. Use the `privacyGroupId` in CUSTOM visibility posts
+
+All requests include example bodies and descriptions for easy testing.
