@@ -16,6 +16,7 @@ This folder contains all Postman API documentation files organized by module.
 - **[profiles.md](./profiles.md)** - User profile management APIs
 - **[shopify-checkout.md](./shopify-checkout.md)** - Shopify checkout flow (Cart, Checkout, Payment, Webhooks)
 - **[shared-cart.md](./shared-cart.md)** - Shared Cart / Group Shopping Session API (real-time collaborative shopping)
+- **[search.md](./search.md)** - Advanced Search & Discovery API (global search, filters, history, trending)
 
 ### Social Module
 
