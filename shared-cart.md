@@ -15,24 +15,48 @@ Complete API documentation for the Shared Cart feature in DoneBuddy. This module
 
 ---
 
+## Features Summary
+
+| Feature | Description |
+|---------|-------------|
+| **Start/End Session** | Start shared cart for 1:1 or group chats; end copies items to personal carts |
+| **Permission Model** | Groups: creator/admin start; 1:1: both participants; host or group admin/creator can end |
+| **Multiple Sessions Per Conversation** | Only one active session at a time; past sessions allowed (partial unique index) |
+| **Participants Snapshot** | JSON snapshot of participants + roles at session start for audit |
+| **Audit Events** | `ShoppingSessionEvent` records: START, END, ADD_ITEM, UPDATE_ITEM, REMOVE_ITEM |
+| **Cart Routing** | `POST /api/cart/items` with `conversationId` routes to shared cart when session active |
+| **Add-to-Cart from Product Pages** | `useShoppingSession().addToCart()` routes to shared or personal based on context |
+| **Seller Discovery** | `GET /api/sellers/first` returns first active seller ID for session start |
+| **Real-time Sync** | Socket.io events for item add/update/remove/like and session lifecycle |
+| **Idempotent End** | Ending session multiple times returns same result; `finalizeKey` prevents duplicate processing |
+| **Price Snapshots** | Prices stored at add time; preserved even if variant price changes |
+| **Single Seller** | All items in a session must be from the same seller |
+
+---
+
 ## Table of Contents
 
 1. [Authentication](#authentication)
-2. [Session Lifecycle](#session-lifecycle)
+2. [Helper Endpoints](#helper-endpoints)
+   - [Get First Seller](#get-first-seller)
+3. [Session Lifecycle](#session-lifecycle)
    - [Start Shopping Session](#start-shopping-session)
    - [Join Shopping Session](#join-shopping-session)
    - [End Shopping Session](#end-shopping-session)
-3. [Shared Cart Management](#shared-cart-management)
+4. [Cart Routing](#cart-routing-add-to-cart)
+   - [Add to Cart (Unified Endpoint)](#add-to-cart-unified-endpoint)
+5. [Shared Cart Management](#shared-cart-management)
    - [Get Session Cart](#get-session-cart)
    - [Add Item to Session Cart](#add-item-to-session-cart)
    - [Update Session Cart Item](#update-session-cart-item)
    - [Remove Session Cart Item](#remove-session-cart-item)
-4. [Item Reactions](#item-reactions)
+6. [Item Reactions](#item-reactions)
    - [Toggle Item Like](#toggle-item-like)
-5. [Real-time Events (Socket.io)](#real-time-events-socketio)
-6. [Flow Diagram](#flow-diagram)
-7. [Error Responses](#error-responses)
-8. [Important Notes](#important-notes)
+7. [Real-time Events (Socket.io)](#real-time-events-socketio)
+8. [Frontend Components](#frontend-components)
+9. [Flow Diagram](#flow-diagram)
+10. [Error Responses](#error-responses)
+11. [Important Notes](#important-notes)
 
 ---
 
@@ -46,6 +70,30 @@ Authorization: Bearer <your-jwt-token>
 ```
 
 **User Roles:** `USER`, `SELLER`, `MEDIATOR`
+
+---
+
+## Helper Endpoints
+
+### Get First Seller
+
+**Description:** Returns the ID of the first active seller. Use this when starting a shopping session if you don't have a specific seller ID.
+
+**Endpoint:** `GET /api/sellers/first`
+
+**Authentication:** Required
+
+**Example Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "sellerId": "1"
+  }
+}
+```
+
+**Error (404):** `"No active seller found for shared cart"` when no active seller exists.
 
 ---
 
@@ -112,10 +160,16 @@ Content-Type: application/json
 ```
 
 **Behavior:**
+- **Permission:** Groups: only creator or admin can start. 1:1: both participants can start.
 - Validates that user is a conversation participant
-- Ensures no active session already exists for the conversation
+- Ensures no active session already exists for the conversation (one active per conversation)
 - Automatically adds all conversation participants to the session
 - Sets the requester as the session host
+- Stores `participantsSnapshot` (JSON: userId + roleInChat) for audit
+- Creates audit event `START` in `ShoppingSessionEvent`
+- Validates `sellerId` exists (returns 404 if not found)
+
+**Seller ID:** Use `GET /api/sellers/first` to get the first active seller ID when starting a session.
 
 **Socket Event:** `session:started` emitted to `conversation_{conversationId}` room
 
@@ -134,6 +188,22 @@ Content-Type: application/json
 {
   "message": "User is not a participant in this conversation",
   "status_code": 403
+}
+```
+
+**403 Forbidden - Groups: Creator/Admin Only:**
+```json
+{
+  "message": "Only conversation creator or admins can start a shopping session",
+  "status_code": 403
+}
+```
+
+**404 Not Found - Seller Not Found:**
+```json
+{
+  "message": "Seller not found. Please use a valid seller ID.",
+  "status_code": 404
 }
 ```
 
@@ -256,16 +326,21 @@ Authorization: Bearer <your-jwt-token>
   - Sets `cart.sourceShoppingSessionId` to track origin
 - Sets `finalizedAt` timestamp to prevent duplicate processing
 
-**Important:** Only the session host can end the session.
+**Permission:** Host or group admin/creator can end. In 1:1, only the host can end.
+
+**Behavior (continued):**
+- Sets `endedBy` to the profile ID of who ended the session
+- Creates audit event `END` in `ShoppingSessionEvent`
+- Uses `finalizeKey` for idempotency (64-char hex)
 
 **Socket Event:** `session:ended` emitted to `shopping_session:{sessionId}` room
 
 **Error Responses:**
 
-**403 Forbidden - Not Host:**
+**403 Forbidden - Not Allowed:**
 ```json
 {
-  "message": "Only the session host can end the session",
+  "message": "Only the session host or group admins can end the session",
   "status_code": 403
 }
 ```
@@ -277,6 +352,51 @@ Authorization: Bearer <your-jwt-token>
   "status_code": 400
 }
 ```
+
+---
+
+## Cart Routing (Add to Cart)
+
+When a shopping session is active, adding items can route to either the **shared cart** or **personal cart** depending on context.
+
+### Add to Cart (Unified Endpoint)
+
+**Endpoint:** `POST /api/cart/items`
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `productVariantId` | string/number | Optional | Product variant ID |
+| `shopifyVariantId` | string | Optional | Shopify variant ID |
+| `productUuid` | string | Optional | Product UUID |
+| `variantOption` | object | Optional | Variant options |
+| `quantity` | number | Required | Quantity (min: 1) |
+| `conversationId` | string/number | Optional | **When provided + active session exists → routes to shared cart** |
+
+**Routing Logic:**
+1. If `conversationId` is provided, check for active shopping session for that conversation
+2. If active session exists and user is participant → add to **shared cart** (returns `target: "shared"`)
+3. Otherwise → add to **personal cart** (default behavior)
+
+**Example Response (Shared Cart):**
+```json
+{
+  "success": true,
+  "message": "Item added to shared cart",
+  "data": {
+    "target": "shared",
+    "sessionId": "1",
+    "item": {
+      "id": "1",
+      "quantity": 2,
+      "product": { ... }
+    }
+  }
+}
+```
+
+**Variant Resolution:** When routing to shared cart, `shopifyVariantId` is required. If not provided, it is resolved from `productVariantId` or `productUuid`.
 
 ---
 
@@ -446,6 +566,7 @@ Content-Type: application/json
 - If item already exists (same `shopifyVariantId`), increments quantity
 - Otherwise creates new item with price snapshot
 - Stores price at add time (preserves price even if variant price changes)
+- Creates audit event `ADD_ITEM` in `ShoppingSessionEvent`
 
 **Socket Event:** `session:item_added` emitted to `shopping_session:{sessionId}` room
 
@@ -537,8 +658,8 @@ Content-Type: application/json
 ```
 
 **Behavior:**
-- If `quantity <= 0`, item is deleted
-- Otherwise, quantity is updated
+- If `quantity <= 0`, item is deleted (creates `REMOVE_ITEM` audit event)
+- Otherwise, quantity is updated (creates `UPDATE_ITEM` audit event)
 - Validates session is active and user is participant
 
 **Socket Events:**
@@ -1255,10 +1376,12 @@ const startSession = async () => {
 
 ### Session Behavior
 
-- ✅ **One Active Session Per Conversation**: Only one active session can exist per conversation
+- ✅ **One Active Session Per Conversation**: Only one active session can exist per conversation (partial unique index on `conversation_id` WHERE `status = 'active'`)
+- ✅ **Multiple Past Sessions**: A conversation can have multiple ended sessions over time; only one active at a time
 - ✅ **Auto-Participant Addition**: All conversation participants are automatically added when session starts
-- ✅ **Host-Only End**: Only the session host can end the session (configurable)
-- ✅ **Idempotent End**: Ending session multiple times returns the same result
+- ✅ **Permission to Start**: Groups: creator or admin only. 1:1: both participants.
+- ✅ **Permission to End**: Host or group admin/creator. In 1:1, only host.
+- ✅ **Idempotent End**: Ending session multiple times returns the same result; `finalizeKey` prevents duplicate processing
 
 ### Shared Cart Behavior
 
@@ -1293,7 +1416,15 @@ const startSession = async () => {
 
 - ✅ **Conversation Participants Only**: Only conversation participants can start/join sessions
 - ✅ **Session Participants Only**: Only session participants can modify session cart
-- ✅ **Host-Only End**: Only session host can end session (by default)
+- ✅ **Host or Group Admin/Creator**: Can end session (not just host in groups)
+
+### Audit & Data Model
+
+- ✅ **Participants Snapshot**: `participantsSnapshot` (JSONB) stores `userId` + `roleInChat` at session start
+- ✅ **Audit Events**: `ShoppingSessionEvent` records: `START`, `END`, `ADD_ITEM`, `UPDATE_ITEM`, `REMOVE_ITEM`
+- ✅ **endedBy**: Profile ID of who ended the session
+- ✅ **version**: Optimistic concurrency field (integer, default 1)
+- ✅ **finalizeKey**: 64-char hex for idempotent end finalization
 
 ---
 
@@ -1376,5 +1507,5 @@ For issues or questions:
 3. Ensure session is ACTIVE before modifying cart
 4. Verify Socket.io connection is established
 
-**Last Updated:** January 24, 2026  
-**Version:** 1.0
+**Last Updated:** February 2, 2026  
+**Version:** 1.1

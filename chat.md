@@ -10,6 +10,7 @@ The chat system supports:
 - **Group management** with admin/member roles
 - **Text messages** with @mentions support
 - **Image messages** (uploaded to Cloudinary) with optional captions
+- **Video messages** (MP4, WebM, MOV, etc.) with optional captions ⭐ NEW
 - **File messages** (PDF, DOC, DOCX, ZIP, RAR) with optional captions
 - **Voice messages** (audio recordings) with playback controls ⭐ NEW
 - **Message reactions** with emoji (👍❤️😂😮😢🙏 and more)
@@ -34,6 +35,7 @@ The chat system supports:
 - ✅ **Reply/Quote Messages** - Reply to messages with quote preview
 - ✅ **Edit Messages** - Edit sent messages with full history tracking
 - ✅ **Voice Messages** - Record and send audio messages with playback
+- ✅ **Video Messages** - Send video files in chat (single and group)
 - ✅ **@Mentions** - Mention users in messages with autocomplete
 - ✅ **Message Search** - Full-text search across all conversations
 - ✅ **Recording Indicator** - Shows "🎙️ Recording..." when users record voice messages
@@ -170,10 +172,11 @@ socket.on("new_message", (data) => {
   //     id: "456",
   //     conversationId: "123",
   //     senderId: "user-id",
-  //     type: "TEXT" | "IMAGE" | "FILE",
+  //     type: "TEXT" | "IMAGE" | "VIDEO" | "FILE" | "VOICE",
   //     content: "Message content or file URL",
   //     meta: {
   //       // For IMAGE: imageUrl, publicId, width, height, caption (optional)
+  //       // For VIDEO: videoUrl, publicId, width, height, duration, caption (optional)
   //       // For FILE: imageUrl, publicId, resource_type, fileName, fileSize, size, caption (optional)
   //     },
   //     createdAt: "2024-01-01T00:00:00Z",
@@ -1341,7 +1344,7 @@ Search for messages across all your conversations or within a specific conversat
 **Query Parameters:**
 - `query` (required): Search query string (2-200 chars)
 - `conversationId` (optional): Limit search to specific conversation
-- `type` (optional): Filter by message type (`TEXT`, `IMAGE`, `FILE`, `VOICE`)
+- `type` (optional): Filter by message type (`TEXT`, `IMAGE`, `VIDEO`, `FILE`, `VOICE`)
 - `senderId` (optional): Filter by sender user ID
 - `dateFrom` (optional): Start date (ISO 8601 format)
 - `dateTo` (optional): End date (ISO 8601 format)
@@ -1420,7 +1423,7 @@ GET /api/messages/search/messages?query=project&conversationId=123&type=TEXT&has
 **Features:**
 - ✅ **Full-text search** using PostgreSQL
 - ✅ **Case-insensitive** search with accent support
-- ✅ **Filter by type** (text, images, files, voice)
+- ✅ **Filter by type** (text, images, videos, files, voice)
 - ✅ **Date range filtering**
 - ✅ **Sender filtering**
 - ✅ **Reaction filtering**
@@ -1903,6 +1906,7 @@ function SearchFilters({ filters, onChange }) {
           <option value="">All Types</option>
           <option value="TEXT">Text</option>
           <option value="IMAGE">Images</option>
+          <option value="VIDEO">Videos</option>
           <option value="FILE">Files</option>
           <option value="VOICE">Voice</option>
         </select>
@@ -2049,6 +2053,62 @@ Send an image message with optional caption.
 - Caption is optional and stored in `meta.caption`
 - Max file size: 10MB
 - Images use **lazy loading** for better performance
+- Emitted via Socket.io `new_message` event to all participants (single and group chat)
+
+---
+
+### Send Video Message ⭐ NEW
+
+Send a video message with optional caption. Works in both **single (direct) chat** and **group chat**.
+
+**Endpoint:** `POST /api/messages/:conversationId/video`
+
+**Request:** Form-data (multipart/form-data)
+- `video`: Video file (required) - Max 50MB
+- `caption`: Optional text caption
+
+**Supported Video Types:**
+- MP4, MPEG, QuickTime (.mov), WebM, AVI, WMV
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Video message sent successfully",
+  "data": {
+    "id": "792",
+    "conversationId": "123",
+    "senderId": "your-user-id",
+    "type": "VIDEO",
+    "content": "https://cloudinary.com/video-url.mp4",
+    "meta": {
+      "videoUrl": "https://cloudinary.com/video-url.mp4",
+      "publicId": "chat/videos/123/user_id_timestamp",
+      "width": 1920,
+      "height": 1080,
+      "duration": 30,
+      "caption": "Check out this video!"
+    },
+    "createdAt": "2024-01-01T00:00:00Z",
+    "readAt": null,
+    "editedAt": null,
+    "deletedAt": null,
+    "reactions": [],
+    "sender": {
+      "id": "your-user-id",
+      "displayName": "Your Name",
+      "avatarUrl": "https://..."
+    }
+  }
+}
+```
+
+**Notes:**
+- Videos are uploaded to Cloudinary under `chat/videos/{conversationId}/`
+- Caption is optional and stored in `meta.caption`
+- Max file size: 50MB
+- Emitted via Socket.io `new_message` event to all participants (single and group chat)
+- Listen for `new_message` and check `message.type === "VIDEO"` to render video player
 
 ---
 
@@ -2524,19 +2584,27 @@ Remove your emoji reaction from a message.
      - caption: "Optional caption" (optional)
    ```
 
-7. **Get Messages:**
+7. **Send Video Message:** ⭐ NEW
+   ```
+   POST /api/messages/{conversationId}/video
+   Form-data: 
+     - video: [file]
+     - caption: "Optional caption" (optional)
+   ```
+
+8. **Get Messages:**
    ```
    GET /api/messages/{conversationId}?page=1&size=50
    GET /api/messages/{conversationId}?page=1&size=50&before=message-id
    ```
 
-8. **Mark as Read:**
+9. **Mark as Read:**
    ```
    PATCH /api/messages/{conversationId}/read
    Body: { "messageIds": ["msg-id-1", "msg-id-2"] }
    ```
 
-9. **Send Message with Reply:**
+10. **Send Message with Reply:**
    ```
    POST /api/messages/{conversationId}/reply
    Body: {
@@ -2546,13 +2614,13 @@ Remove your emoji reaction from a message.
    }
    ```
 
-10. **Edit Message:**
+11. **Edit Message:**
    ```
    PATCH /api/messages/{conversationId}/{messageId}/edit
    Body: { "content": "Updated message text" }
    ```
 
-11. **Send Voice Message:**
+12. **Send Voice Message:**
    ```
    POST /api/messages/{conversationId}/voice
    Form-data:
@@ -2560,7 +2628,7 @@ Remove your emoji reaction from a message.
      - caption: "Voice message" (optional)
    ```
 
-12. **Search Messages:**
+13. **Search Messages:**
    ```
    GET /api/messages/search/messages?query=keyword&conversationId=123&page=1
    ```
@@ -2622,8 +2690,9 @@ Remove your emoji reaction from a message.
 ### Message Types
 - **TEXT**: Plain text messages
 - **IMAGE**: Image files (with optional caption)
+- **VIDEO**: Video files (MP4, WebM, MOV, etc.) with optional caption ⭐ NEW
 - **FILE**: Document files (PDF, DOC, DOCX, ZIP, RAR)
-- **VOICE**: Audio/voice messages (WebM, MP3, WAV, OGG) ⭐ NEW
+- **VOICE**: Audio/voice messages (WebM, MP3, WAV, OGG)
 
 ### Message States
 - **Normal**: Active message visible to all
@@ -2639,12 +2708,14 @@ Remove your emoji reaction from a message.
 
 ### File Storage
 - **Images**: Stored in Cloudinary under `chat/images/{conversationId}/`
+- **Videos**: Stored in Cloudinary under `chat/videos/{conversationId}/` ⭐ NEW
 - **Files**: Stored in Cloudinary under `chat/files/{conversationId}/`
-- **Voice Messages**: Stored in Cloudinary under `chat/voice/{conversationId}/` ⭐ NEW
+- **Voice Messages**: Stored in Cloudinary under `chat/voice/{conversationId}/`
 - **File Size Limits**:
   - Images: 10MB max
+  - Videos: 50MB max ⭐ NEW
   - Files: 15MB max
-  - Voice: 15MB max ⭐ NEW
+  - Voice: 15MB max
 
 ### Socket.io Behavior
 - Messages emitted to **all participants except sender**

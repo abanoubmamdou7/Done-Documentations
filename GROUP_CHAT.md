@@ -14,6 +14,7 @@ Added full group chat support with the ability to create groups, manage particip
 - ✅ **Leave Group** - Any member can leave at any time
 - ✅ **Auto-delete** - Group deleted when last member leaves
 - ✅ **@Mentions** - Tag specific members to get their attention ⭐ NEW
+- ✅ **Video Messages** - Send videos in groups (same `new_message` socket event) ⭐ NEW
 
 ## Database Changes
 
@@ -360,7 +361,7 @@ socket.emit("typing", {
 
 ### Real-time Features in Groups
 
-1. **Messages** - All members receive `new_message` events instantly
+1. **Messages** - All members receive `new_message` events instantly (text, image, video, file, voice)
 2. **Typing Indicators** - Shows "John is typing..." with user names
 3. **Read Receipts** - Shows who has read messages
 4. **Reactions** - All members see reactions in real-time
@@ -430,6 +431,7 @@ socket.on("new_message", (data) => {
   //   conversationId: "123",
   //   message: {
   //     id: "789",
+  //     type: "TEXT" | "IMAGE" | "VIDEO" | "FILE" | "VOICE",
   //     content: "Hey @John and @Sarah, check out this report!",
   //     senderId: "uuid-alice",
   //     mentions: [
@@ -773,6 +775,10 @@ function showMentionNotification(message) {
 **Currently Available:**
 - `POST /api/messages/:conversationId/text` - Send with mentions
 - `POST /api/messages/:conversationId/reply` - Reply with mentions
+- `POST /api/messages/:conversationId/image` - Send image with optional caption
+- `POST /api/messages/:conversationId/video` - Send video with optional caption ⭐ NEW
+- `POST /api/messages/:conversationId/file` - Send file (PDF, DOC, etc.)
+- `POST /api/messages/:conversationId/voice` - Send voice message
 - `GET /api/messages/:conversationId` - Fetch messages (includes mentions)
 - `GET /api/messages/search/messages` - Search messages (mentions included)
 
@@ -1016,10 +1022,11 @@ model Conversation {
 
 ### Sending Messages in Groups:
 1. Open the group chat
-2. Type your message
-3. All members receive the message via Socket.IO
+2. Type your message (or attach image, video, file, or voice)
+3. All members receive the message via Socket.IO `new_message` event
 4. Message shows your name above it (for others)
 5. Others see typing indicator: "Your Name is typing..."
+6. **Video messages**: `POST /api/messages/:conversationId/video` with form-data `video` (max 50MB) - works same as single chat
 
 ### Adding More Members (Admin Only):
 1. Open the group chat

@@ -394,15 +394,30 @@ Authorization: Bearer <your-jwt-token>
 
 **Authentication:** Required
 
-**Request Body:** Empty (uses active cart)
+**Request Body:**
 
-**Example Request:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cartItemIds` | array | Optional | Cart item IDs to checkout. If omitted or empty, **all cart items** are checked out (default). |
+
+**Example Request (checkout all - default):**
 ```http
 POST /api/checkout
 Authorization: Bearer <your-jwt-token>
 Content-Type: application/json
 
 {}
+```
+
+**Example Request (checkout specific items):**
+```http
+POST /api/checkout
+Authorization: Bearer <your-jwt-token>
+Content-Type: application/json
+
+{
+  "cartItemIds": ["1", "3", "5"]
+}
 ```
 
 **Example Response (200 OK):**
@@ -421,11 +436,13 @@ Content-Type: application/json
 
 **Flow:**
 1. Loads active cart
-2. Verifies all items belong to the same Shopify store
-3. Converts cart items to Shopify Draft Order `line_items`
-4. Creates Draft Order via Shopify Admin REST API
-5. Marks local cart as `CHECKED_OUT`
-6. Returns `invoice_url` for customer to complete checkout
+2. If `cartItemIds` provided: filters to only those items; otherwise uses all items
+3. Verifies all selected items belong to the same Shopify store
+4. Converts cart items to Shopify Draft Order `line_items`
+5. Creates Draft Order via Shopify Admin REST API
+6. **Full checkout** (no cartItemIds): marks cart as `CHECKED_OUT`
+7. **Partial checkout** (cartItemIds): removes checked-out items from cart; marks `CHECKED_OUT` if cart empty
+8. Returns `invoice_url` for customer to complete checkout
 
 **Important Notes:**
 - **Shipping**: Calculated by Shopify Checkout (manual rates only - Basic Shopify)
@@ -447,6 +464,21 @@ Content-Type: application/json
 ```json
 {
   "message": "All cart items must be from the same Shopify store",
+  "status_code": 400
+}
+```
+
+**400 Bad Request - Invalid cartItemIds:**
+```json
+{
+  "message": "No valid cart items found for the provided cartItemIds",
+  "status_code": 400
+}
+```
+
+```json
+{
+  "message": "Some cartItemIds are not in your cart: 99, 100",
   "status_code": 400
 }
 ```
