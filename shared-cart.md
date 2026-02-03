@@ -15,6 +15,36 @@ Complete API documentation for the Shared Cart feature in DoneBuddy. This module
 
 ---
 
+## Shared Cart and Seller Relationship
+
+A shared cart (shopping session) is **scoped to a single Seller**. This relationship is central to how the feature works.
+
+### Why a Seller is Required
+
+| Aspect | Explanation |
+|--------|--------------|
+| **Single-store checkout** | Shopify Checkout requires all items in an order to come from one store. A session is locked to one seller so participants can complete checkout on that seller's Shopify store. |
+| **Product catalog** | Participants can only add products that belong to the session's seller. Adding a product from another seller returns `400: Product variant does not belong to session's seller`. |
+| **Pricing & currency** | Prices and currency are taken from the seller's Shopify store (e.g. `shopCurrency`). |
+
+### How It Works
+
+1. **Session start** – `sellerId` is **optional**. When omitted, the backend uses the first active seller (ideal for single-seller apps). When provided, the session is bound to that seller.
+2. **Add to cart** – Only product variants from that seller can be added. Variants from other sellers are rejected.
+3. **Session end** – Items are copied to each participant's personal cart. When they checkout, the order is created on the seller's Shopify store.
+
+### Getting the Seller ID
+
+- **Omit `sellerId`** – For single-seller apps, just pass `conversationId`. The backend auto-resolves the first active seller.
+- **`GET /api/sellers/first`** – Returns the first active seller. Use when you need the ID for display or multi-seller logic.
+- **Explicit choice** – If your app has multiple sellers, pass `sellerId` so the user can choose which store to shop from.
+
+### Summary
+
+> **One session = one seller.** All items in a shared cart come from that seller's catalog, and checkout happens on that seller's Shopify store.
+
+---
+
 ## Features Summary
 
 | Feature | Description |
@@ -26,7 +56,7 @@ Complete API documentation for the Shared Cart feature in DoneBuddy. This module
 | **Audit Events** | `ShoppingSessionEvent` records: START, END, ADD_ITEM, UPDATE_ITEM, REMOVE_ITEM |
 | **Cart Routing** | `POST /api/cart/items` with `conversationId` routes to shared cart when session active |
 | **Add-to-Cart from Product Pages** | `useShoppingSession().addToCart()` routes to shared or personal based on context |
-| **Seller Discovery** | `GET /api/sellers/first` returns first active seller ID for session start |
+| **Auto Seller** | `sellerId` optional – backend uses first active seller when omitted (single-seller apps) |
 | **Real-time Sync** | Socket.io events for item add/update/remove/like and session lifecycle |
 | **Idempotent End** | Ending session multiple times returns same result; `finalizeKey` prevents duplicate processing |
 | **Price Snapshots** | Prices stored at add time; preserved even if variant price changes |
@@ -36,27 +66,28 @@ Complete API documentation for the Shared Cart feature in DoneBuddy. This module
 
 ## Table of Contents
 
-1. [Authentication](#authentication)
-2. [Helper Endpoints](#helper-endpoints)
+1. [Shared Cart and Seller Relationship](#shared-cart-and-seller-relationship)
+2. [Authentication](#authentication)
+3. [Helper Endpoints](#helper-endpoints)
    - [Get First Seller](#get-first-seller)
-3. [Session Lifecycle](#session-lifecycle)
+4. [Session Lifecycle](#session-lifecycle)
    - [Start Shopping Session](#start-shopping-session)
    - [Join Shopping Session](#join-shopping-session)
    - [End Shopping Session](#end-shopping-session)
-4. [Cart Routing](#cart-routing-add-to-cart)
+5. [Cart Routing](#cart-routing-add-to-cart)
    - [Add to Cart (Unified Endpoint)](#add-to-cart-unified-endpoint)
-5. [Shared Cart Management](#shared-cart-management)
+6. [Shared Cart Management](#shared-cart-management)
    - [Get Session Cart](#get-session-cart)
    - [Add Item to Session Cart](#add-item-to-session-cart)
    - [Update Session Cart Item](#update-session-cart-item)
    - [Remove Session Cart Item](#remove-session-cart-item)
-6. [Item Reactions](#item-reactions)
+7. [Item Reactions](#item-reactions)
    - [Toggle Item Like](#toggle-item-like)
-7. [Real-time Events (Socket.io)](#real-time-events-socketio)
-8. [Frontend Components](#frontend-components)
-9. [Flow Diagram](#flow-diagram)
-10. [Error Responses](#error-responses)
-11. [Important Notes](#important-notes)
+8. [Real-time Events (Socket.io)](#real-time-events-socketio)
+9. [Frontend Components](#frontend-components)
+10. [Flow Diagram](#flow-diagram)
+11. [Error Responses](#error-responses)
+12. [Important Notes](#important-notes)
 
 ---
 
@@ -77,7 +108,7 @@ Authorization: Bearer <your-jwt-token>
 
 ### Get First Seller
 
-**Description:** Returns the ID of the first active seller. Use this when starting a shopping session if you don't have a specific seller ID.
+**Description:** Returns the ID of the first active seller. Optional – the start-session endpoint auto-resolves the first seller when `sellerId` is omitted. Use this when you need the ID for display or multi-seller logic.
 
 **Endpoint:** `GET /api/sellers/first`
 
@@ -112,9 +143,20 @@ Authorization: Bearer <your-jwt-token>
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `conversationId` | string/number | Required | Conversation ID where session will be created |
-| `sellerId` | string/number | Required | Seller ID (all items must be from this seller) |
+| `sellerId` | string/number | Optional | Seller ID. When omitted, uses first active seller (single-seller apps). |
 
-**Example Request:**
+**Example Request (single-seller – no sellerId needed):**
+```http
+POST /api/shopping-sessions/start
+Authorization: Bearer <your-jwt-token>
+Content-Type: application/json
+
+{
+  "conversationId": "123"
+}
+```
+
+**Example Request (multi-seller – explicit sellerId):**
 ```http
 POST /api/shopping-sessions/start
 Authorization: Bearer <your-jwt-token>
@@ -163,13 +205,11 @@ Content-Type: application/json
 - **Permission:** Groups: only creator or admin can start. 1:1: both participants can start.
 - Validates that user is a conversation participant
 - Ensures no active session already exists for the conversation (one active per conversation)
+- **Seller:** If `sellerId` omitted, uses first active seller. If provided, validates it exists (404 if not found).
 - Automatically adds all conversation participants to the session
 - Sets the requester as the session host
 - Stores `participantsSnapshot` (JSON: userId + roleInChat) for audit
 - Creates audit event `START` in `ShoppingSessionEvent`
-- Validates `sellerId` exists (returns 404 if not found)
-
-**Seller ID:** Use `GET /api/sellers/first` to get the first active seller ID when starting a session.
 
 **Socket Event:** `session:started` emitted to `conversation_{conversationId}` room
 
@@ -1232,10 +1272,7 @@ const startSession = async () => {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      conversationId: "123",
-      sellerId: "1"
-    })
+    body: JSON.stringify({ conversationId: "123" })
   });
   
   const { session } = await response.json();
@@ -1436,10 +1473,10 @@ const startSession = async () => {
    ```http
    POST /api/shopping-sessions/start
    {
-     "conversationId": "123",
-     "sellerId": "1"
+     "conversationId": "123"
    }
    ```
+   (sellerId optional – backend uses first active seller when omitted)
    Copy `sessionId` from response.
 
 2. **Join Session Room (Socket.io):**
