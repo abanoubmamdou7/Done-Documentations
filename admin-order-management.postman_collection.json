@@ -1,0 +1,633 @@
+{
+  "info": {
+    "name": "Admin Order Management",
+    "description": "DoneBuddy Admin Panel — Order Management API.\n\nCovers: listing, viewing, status updates, payment/fulfillment tracking, assignment, priority, tags, fraud review, cancel, refund, notes, timeline, and bulk operations.\n\n**Setup:**\n1. Set `baseUrl` to your server (e.g. http://localhost:3000)\n2. Run **Login** from the Admin User Management collection and copy `accessToken`\n3. Run **List Orders** — the test script auto-saves the first order's UUID to `orderUuid`\n4. Set `adminUserId` to any admin UUID for assignment requests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl",     "value": "http://localhost:3000",  "description": "API base URL" },
+    { "key": "accessToken", "value": "",                        "description": "Set after Login (from Admin User Management collection)" },
+    { "key": "orderUuid",   "value": "",                        "description": "Target order UUID — auto-set by List Orders test script" },
+    { "key": "adminUserId", "value": "",                        "description": "Admin user UUID for assignment requests" }
+  ],
+  "item": [
+    {
+      "name": "Orders — List & Get",
+      "description": "Read operations for orders. Requires `orders.read`.",
+      "item": [
+        {
+          "name": "List Orders",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.orders && json.data.orders.length > 0) {",
+                  "    pm.collectionVariables.set('orderUuid', json.data.orders[0].uuid);",
+                  "    console.log('orderUuid saved:', json.data.orders[0].uuid);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders?page=1&limit=20&sortBy=createdAt&sortOrder=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders"],
+              "query": [
+                { "key": "page",              "value": "1",           "description": "Page number" },
+                { "key": "limit",             "value": "20",          "description": "Items per page (max 100)" },
+                { "key": "search",            "value": "",            "description": "Search by order name, Shopify ID, buyer, customer email/phone", "disabled": true },
+                { "key": "status",            "value": "PENDING",     "description": "PENDING | PAID | SHIPPED | COMPLETED | CANCELLED", "disabled": true },
+                { "key": "paymentStatus",     "value": "UNPAID",      "description": "UNPAID | PAID | PARTIALLY_PAID | REFUNDED | PARTIALLY_REFUNDED", "disabled": true },
+                { "key": "fulfillmentStatus", "value": "UNFULFILLED", "description": "UNFULFILLED | PARTIALLY_FULFILLED | FULFILLED", "disabled": true },
+                { "key": "source",            "value": "",            "description": "Order source", "disabled": true },
+                { "key": "assignedTo",        "value": "",            "description": "Assigned admin UUID", "disabled": true },
+                { "key": "priority",          "value": "HIGH",        "description": "LOW | MEDIUM | HIGH | URGENT", "disabled": true },
+                { "key": "customerId",        "value": "",            "description": "Customer ID", "disabled": true },
+                { "key": "fromDate",          "value": "",            "description": "ISO date — filter from", "disabled": true },
+                { "key": "toDate",            "value": "",            "description": "ISO date — filter to", "disabled": true },
+                { "key": "minTotal",          "value": "",            "description": "Minimum order total", "disabled": true },
+                { "key": "maxTotal",          "value": "",            "description": "Maximum order total", "disabled": true },
+                { "key": "sortBy",            "value": "createdAt",   "description": "createdAt | updatedAt | total | status | priority" },
+                { "key": "sortOrder",         "value": "desc",        "description": "asc | desc" }
+              ]
+            },
+            "description": "Paginated order list with full filtering. The test script saves the first order's UUID to `orderUuid`.\n\nRequired permission: `orders.read`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Orders retrieved\",\n  \"data\": {\n    \"orders\": [\n      {\n        \"id\": \"12345\",\n        \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n        \"shopifyOrderNumber\": 1001,\n        \"shopifyOrderName\": \"#1001\",\n        \"total\": \"149.99\",\n        \"currency\": \"USD\",\n        \"status\": \"PENDING\",\n        \"paymentStatus\": \"UNPAID\",\n        \"fulfillmentStatus\": \"UNFULFILLED\",\n        \"priority\": \"HIGH\",\n        \"source\": \"shopify\",\n        \"tags\": [\"vip\"],\n        \"assignedToAdminId\": null,\n        \"assignedToAdmin\": null,\n        \"buyer\": { \"id\": \"98765\", \"displayName\": \"John Buyer\", \"avatarUrl\": null, \"phone\": \"+1234567890\" },\n        \"customer\": { \"id\": \"11111\", \"firstName\": \"John\", \"lastName\": \"Doe\", \"email\": \"john@example.com\", \"phone\": \"+1234567890\" },\n        \"_count\": { \"items\": 3, \"notes\": 0 },\n        \"createdAt\": \"2026-03-15T10:00:00Z\",\n        \"updatedAt\": \"2026-03-15T10:00:00Z\"\n      }\n    ],\n    \"total\": 42,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 3\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Order Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}"]
+            },
+            "description": "Full order detail including items, seller, product variants.\n\nRequired permission: `orders.read`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Order retrieved\",\n  \"data\": {\n    \"id\": \"12345\",\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"shopifyOrderNumber\": 1001,\n    \"shopifyOrderName\": \"#1001\",\n    \"total\": \"149.99\",\n    \"currency\": \"USD\",\n    \"status\": \"PENDING\",\n    \"paymentStatus\": \"UNPAID\",\n    \"fulfillmentStatus\": \"UNFULFILLED\",\n    \"priority\": \"HIGH\",\n    \"source\": \"shopify\",\n    \"tags\": [\"vip\"],\n    \"cancelReason\": null,\n    \"seller\": { \"id\": \"55555\", \"shopName\": \"My Store\", \"shopifyDomain\": \"mystore.myshopify.com\", \"shopEmail\": \"shop@example.com\", \"shopCurrency\": \"USD\" },\n    \"items\": [\n      {\n        \"id\": \"999\",\n        \"quantity\": 2,\n        \"price\": \"49.99\",\n        \"productVariant\": {\n          \"id\": \"888\",\n          \"title\": \"Blue / L\",\n          \"sku\": \"SHIRT-BLU-L\",\n          \"price\": \"49.99\",\n          \"currency\": \"USD\",\n          \"product\": { \"id\": \"777\", \"title\": \"Classic T-Shirt\", \"mainImageUrl\": \"https://cdn.shopify.com/...\", \"vendor\": \"BrandName\" }\n        }\n      }\n    ],\n    \"_count\": { \"items\": 1, \"notes\": 2 },\n    \"createdAt\": \"2026-03-15T10:00:00Z\",\n    \"updatedAt\": \"2026-03-15T10:00:00Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"message\": \"Order not found\",\n  \"status_code\": 404\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orders — Status Mutations",
+      "description": "Update order, payment, and fulfillment status. Requires `orders.update`.",
+      "item": [
+        {
+          "name": "Update Order Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"PAID\",\n  \"reason\": \"Payment confirmed via bank transfer\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "status"]
+            },
+            "description": "Transition order to a new status. Only valid transitions are accepted.\n\nValid transitions:\n- PENDING → PAID | CANCELLED\n- PAID → SHIPPED | CANCELLED\n- SHIPPED → COMPLETED | CANCELLED\n- COMPLETED → (terminal)\n- CANCELLED → (terminal)\n\nRequired permission: `orders.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Order status updated\",\n  \"data\": {\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"status\": \"PAID\",\n    \"updatedAt\": \"2026-03-15T10:30:00Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Invalid Transition",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"message\": \"Cannot transition order from CANCELLED to PAID\",\n  \"status_code\": 400\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Payment Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentStatus\": \"PAID\",\n  \"reason\": \"COD collected by driver\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/payment-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "payment-status"]
+            },
+            "description": "Update payment status. Only valid transitions accepted.\n\nValid transitions:\n- UNPAID → PAID | PARTIALLY_PAID\n- PARTIALLY_PAID → PAID | REFUNDED | PARTIALLY_REFUNDED\n- PAID → REFUNDED | PARTIALLY_REFUNDED\n- PARTIALLY_REFUNDED → REFUNDED\n- REFUNDED → (terminal)\n\nRequired permission: `orders.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Payment status updated\",\n  \"data\": {\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"paymentStatus\": \"PAID\",\n    \"updatedAt\": \"2026-03-15T10:35:00Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Invalid Transition",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"message\": \"Cannot transition payment from REFUNDED to PAID\",\n  \"status_code\": 400\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Fulfillment Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fulfillmentStatus\": \"FULFILLED\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/shipping-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "shipping-status"]
+            },
+            "description": "Update fulfillment / shipping status.\n\nValues: UNFULFILLED | PARTIALLY_FULFILLED | FULFILLED\n\nRequired permission: `orders.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Fulfillment status updated\",\n  \"data\": {\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"fulfillmentStatus\": \"FULFILLED\",\n    \"updatedAt\": \"2026-03-15T11:00:00Z\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orders — Assignment & Metadata",
+      "description": "Assign orders to admins, set priority, tags, and fraud review. Requires `orders.update`.",
+      "item": [
+        {
+          "name": "Assign Order",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignedToAdminId\": \"{{adminUserId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/assign",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "assign"]
+            },
+            "description": "Assign the order to an admin. Send `null` to unassign.\n\nRequired permission: `orders.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK — assigned",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Order assigned\",\n  \"data\": {\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"assignedToAdminId\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"assignedToAdmin\": {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"fullName\": \"Alice Smith\",\n      \"email\": \"alice@example.com\",\n      \"avatarUrl\": null\n    }\n  }\n}"
+            },
+            {
+              "name": "200 OK — unassigned",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Order assigned\",\n  \"data\": {\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"assignedToAdminId\": null,\n    \"assignedToAdmin\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Unassign Order",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignedToAdminId\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/assign",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "assign"]
+            },
+            "description": "Remove assignment from an order.\n\nRequired permission: `orders.update`"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Priority",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priority\": \"URGENT\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/priority",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "priority"]
+            },
+            "description": "Set order priority.\n\nValues: LOW | MEDIUM | HIGH | URGENT\n\nRequired permission: `orders.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Order priority updated\",\n  \"data\": {\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"priority\": \"URGENT\",\n    \"updatedAt\": \"2026-03-15T10:45:00Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Tags",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tags\": [\"vip\", \"gift\", \"express-shipping\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/tags",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "tags"]
+            },
+            "description": "Replace the entire tags array. Send `[]` to remove all tags. Max 20 tags, each max 100 chars.\n\nRequired permission: `orders.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Order tags updated\",\n  \"data\": {\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"tags\": [\"vip\", \"gift\", \"express-shipping\"],\n    \"updatedAt\": \"2026-03-15T10:50:00Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Mark Fraud Review",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/mark-fraud-review",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "mark-fraud-review"]
+            },
+            "description": "Flag an order for fraud review. Sets priority to URGENT and appends the tag `fraud-review`. No body required. Idempotent.\n\nRequired permission: `orders.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Order flagged for fraud review\",\n  \"data\": {\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"priority\": \"URGENT\",\n    \"tags\": [\"fraud-review\"],\n    \"updatedAt\": \"2026-03-15T10:55:00Z\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orders — Cancel & Refund",
+      "description": "Cancel or initiate refunds for orders. Requires `orders.update`.",
+      "item": [
+        {
+          "name": "Cancel Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Customer requested cancellation\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "cancel"]
+            },
+            "description": "Cancel an order. Cannot cancel COMPLETED or already CANCELLED orders. `reason` is optional.\n\nRequired permission: `orders.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Order cancelled\",\n  \"data\": {\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"status\": \"CANCELLED\",\n    \"cancelReason\": \"Customer requested cancellation\",\n    \"updatedAt\": \"2026-03-15T12:00:00Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Already Cancelled",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"message\": \"Order is already cancelled\",\n  \"status_code\": 400\n}"
+            },
+            {
+              "name": "400 Cannot Cancel Completed",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"message\": \"Cannot cancel a completed order\",\n  \"status_code\": 400\n}"
+            }
+          ]
+        },
+        {
+          "name": "Initiate Full Refund",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Defective item\",\n  \"refundType\": \"full\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/refund",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "refund"]
+            },
+            "description": "Record a full refund. Sets paymentStatus to REFUNDED.\n\nRequired permission: `orders.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Refund initiated\",\n  \"data\": {\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"paymentStatus\": \"REFUNDED\",\n    \"updatedAt\": \"2026-03-15T12:30:00Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Unpaid Order",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"message\": \"Cannot refund an unpaid order\",\n  \"status_code\": 400\n}"
+            },
+            {
+              "name": "400 Already Refunded",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"message\": \"Order has already been fully refunded\",\n  \"status_code\": 400\n}"
+            }
+          ]
+        },
+        {
+          "name": "Initiate Partial Refund",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 50.00,\n  \"reason\": \"Item arrived damaged, partial compensation agreed\",\n  \"refundType\": \"partial\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/refund",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "refund"]
+            },
+            "description": "Record a partial refund. Sets paymentStatus to PARTIALLY_REFUNDED.\n\nRequired permission: `orders.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Refund initiated\",\n  \"data\": {\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"paymentStatus\": \"PARTIALLY_REFUNDED\",\n    \"updatedAt\": \"2026-03-15T12:30:00Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Amount Exceeds Total",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"message\": \"Refund amount cannot exceed order total\",\n  \"status_code\": 400\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orders — Notes",
+      "description": "Add and list internal notes on an order.",
+      "item": [
+        {
+          "name": "Add Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Customer called — confirmed delivery address. Driver will call 30 mins before arrival.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/notes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "notes"]
+            },
+            "description": "Add an internal note attributed to the authenticated admin. Note is 1–2000 chars.\n\nRequired permission: `orders.update`"
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"message\": \"Note added\",\n  \"data\": {\n    \"id\": \"note-uuid-here\",\n    \"note\": \"Customer called — confirmed delivery address. Driver will call 30 mins before arrival.\",\n    \"isInternal\": true,\n    \"createdAt\": \"2026-03-15T11:30:00Z\",\n    \"updatedAt\": \"2026-03-15T11:30:00Z\",\n    \"authorAdmin\": {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"fullName\": \"Alice Smith\",\n      \"email\": \"alice@example.com\",\n      \"avatarUrl\": null\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List Notes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/notes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "notes"]
+            },
+            "description": "Get all internal notes for an order, ordered newest-first.\n\nRequired permission: `orders.read`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Notes retrieved\",\n  \"data\": [\n    {\n      \"id\": \"note-uuid-here\",\n      \"note\": \"Customer called — confirmed delivery address.\",\n      \"isInternal\": true,\n      \"createdAt\": \"2026-03-15T11:30:00Z\",\n      \"updatedAt\": \"2026-03-15T11:30:00Z\",\n      \"authorAdmin\": {\n        \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n        \"fullName\": \"Alice Smith\",\n        \"email\": \"alice@example.com\",\n        \"avatarUrl\": null\n      }\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orders — Timeline",
+      "description": "Audit trail of all admin actions on an order.",
+      "item": [
+        {
+          "name": "Get Order Timeline",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderUuid}}/timeline?page=1&limit=30",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderUuid}}", "timeline"],
+              "query": [
+                { "key": "page",  "value": "1",  "description": "Page number" },
+                { "key": "limit", "value": "30", "description": "Items per page (max 100)" }
+              ]
+            },
+            "description": "Paginated audit trail of all admin actions on this order. Powered by the AuditLog table (entityType = Order).\n\nRequired permission: `orders.read`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Timeline retrieved\",\n  \"data\": {\n    \"logs\": [\n      {\n        \"id\": \"log-uuid-1\",\n        \"action\": \"ORDER_STATUS_CHANGE\",\n        \"meta\": { \"before\": { \"status\": \"PENDING\" }, \"after\": { \"status\": \"PAID\" }, \"reason\": \"Payment confirmed\" },\n        \"ip\": \"192.168.1.1\",\n        \"createdAt\": \"2026-03-15T10:30:00Z\",\n        \"actorAdmin\": { \"id\": \"550e8400-e29b-41d4-a716-446655440000\", \"fullName\": \"Alice Smith\", \"email\": \"alice@example.com\", \"avatarUrl\": null }\n      },\n      {\n        \"id\": \"log-uuid-2\",\n        \"action\": \"ORDER_NOTE_ADDED\",\n        \"meta\": { \"noteId\": \"note-uuid-here\" },\n        \"ip\": \"192.168.1.1\",\n        \"createdAt\": \"2026-03-15T11:30:00Z\",\n        \"actorAdmin\": { \"id\": \"550e8400-e29b-41d4-a716-446655440000\", \"fullName\": \"Alice Smith\", \"email\": \"alice@example.com\", \"avatarUrl\": null }\n      }\n    ],\n    \"total\": 2,\n    \"page\": 1,\n    \"limit\": 30,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orders — Bulk Operations",
+      "description": "Apply status or assignment changes to multiple orders at once. Requires `orders.update`.",
+      "item": [
+        {
+          "name": "Bulk Update Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uuids\": [\n    \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"b2c3d4e5-f6a7-8901-bcde-f12345678901\"\n  ],\n  \"status\": \"PAID\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/bulk/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "bulk", "status"]
+            },
+            "description": "Update status for up to 100 orders at once. Per-item failures don't block others — the response details which succeeded and which failed.\n\nRequired permission: `orders.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK — partial success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Bulk status update complete\",\n  \"data\": {\n    \"updated\": [\"a1b2c3d4-e5f6-7890-abcd-ef1234567890\"],\n    \"failed\": [\n      {\n        \"uuid\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n        \"reason\": \"Cannot transition from CANCELLED to PAID\"\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "200 OK — all succeeded",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Bulk status update complete\",\n  \"data\": {\n    \"updated\": [\n      \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"b2c3d4e5-f6a7-8901-bcde-f12345678901\"\n    ],\n    \"failed\": []\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Bulk Assign",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uuids\": [\n    \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"b2c3d4e5-f6a7-8901-bcde-f12345678901\"\n  ],\n  \"assignedToAdminId\": \"{{adminUserId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/bulk/assign",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "bulk", "assign"]
+            },
+            "description": "Assign up to 100 orders to an admin user in one request. Send `null` for `assignedToAdminId` to unassign.\n\nRequired permission: `orders.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Bulk assign complete\",\n  \"data\": {\n    \"updated\": [\n      \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"b2c3d4e5-f6a7-8901-bcde-f12345678901\"\n    ],\n    \"failed\": []\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Bulk Unassign",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uuids\": [\n    \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"b2c3d4e5-f6a7-8901-bcde-f12345678901\"\n  ],\n  \"assignedToAdminId\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/bulk/assign",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "bulk", "assign"]
+            },
+            "description": "Remove assignment from multiple orders.\n\nRequired permission: `orders.update`"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

@@ -7,6 +7,7 @@ This folder contains all Postman API documentation files organized by module.
 ### Core Modules
 
 - **[admin.md](./admin.md)** - Admin endpoints for user management, content moderation, and analytics
+- **[admin-permissions.md](./admin-permissions.md)** - Admin RBAC: permissions, roles, resources, Postman collection
 - **[auth.md](./auth.md)** - Authentication and FCM token integration (login, logout, settings)
 - **[chat.md](./chat.md)** - Real-time chat system with Socket.io (conversations, messages, typing indicators)
 - **[collections.md](./collections.md)** - Collections API documentation

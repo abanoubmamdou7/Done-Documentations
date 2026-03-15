@@ -1,0 +1,516 @@
+{
+  "info": {
+    "name": "Admin User Management",
+    "description": "DoneBuddy Admin Panel — User Management API. Covers authentication, self-profile (me), admin user CRUD, and audit logs.\n\n**Setup:**\n1. Set `baseUrl` to your server (e.g. http://localhost:3000)\n2. Run **Login** and copy the `accessToken` from the response into the `accessToken` variable\n3. Use **List Admin Users** to grab a `userId` and set the `userId` variable\n4. Use **List Roles** (from Admin Permissions collection) to grab a `roleId`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl",     "value": "http://localhost:3000",  "description": "API base URL" },
+    { "key": "accessToken", "value": "",                        "description": "Set after Login" },
+    { "key": "userId",      "value": "",                        "description": "Target admin user UUID" },
+    { "key": "roleId",      "value": "",                        "description": "Target admin role UUID" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Admin authentication — no token required.",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.accessToken) {",
+                  "    pm.collectionVariables.set('accessToken', json.accessToken);",
+                  "    console.log('accessToken saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"StrongPass1!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "auth", "login"]
+            },
+            "description": "Authenticate as an admin user. On success the test script auto-saves `accessToken` to the collection variable."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"admin\": {\n    \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"email\": \"admin@example.com\",\n    \"fullName\": \"Alice Smith\",\n    \"phone\": \"+1234567890\",\n    \"avatarUrl\": null,\n    \"status\": \"ACTIVE\",\n    \"isActive\": true,\n    \"isSuperAdmin\": false,\n    \"lastLoginAt\": \"2026-03-14T09:00:00Z\",\n    \"roleId\": \"660e8400-e29b-41d4-a716-446655440001\",\n    \"role\": { \"id\": \"660e8400-e29b-41d4-a716-446655440001\", \"name\": \"Super Admin\", \"isActive\": true, \"isSuper\": true },\n    \"createdAt\": \"2026-01-01T00:00:00Z\",\n    \"updatedAt\": \"2026-03-15T10:00:00Z\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Me (Self-Profile)",
+      "description": "Any authenticated admin can view and update their own profile without extra RBAC permissions.",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "me"]
+            },
+            "description": "Returns the authenticated admin's own profile (no extra RBAC required)."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Profile retrieved\",\n  \"data\": {\n    \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"fullName\": \"Alice Smith\",\n    \"email\": \"admin@example.com\",\n    \"phone\": \"+1234567890\",\n    \"avatarUrl\": \"https://cdn.example.com/avatar.png\",\n    \"status\": \"ACTIVE\",\n    \"isActive\": true,\n    \"isSuperAdmin\": false,\n    \"lastLoginAt\": \"2026-03-15T10:00:00Z\",\n    \"roleId\": \"660e8400-e29b-41d4-a716-446655440001\",\n    \"role\": { \"id\": \"660e8400-e29b-41d4-a716-446655440001\", \"name\": \"Super Admin\", \"isActive\": true, \"isSuper\": true },\n    \"createdAt\": \"2026-01-01T00:00:00Z\",\n    \"updatedAt\": \"2026-03-15T10:00:00Z\",\n    \"deletedAt\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Alice J. Smith\",\n  \"phone\": \"+9876543210\",\n  \"avatarUrl\": \"https://cdn.example.com/new-avatar.png\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "me"]
+            },
+            "description": "Update own fullName, phone, or avatarUrl. At least one field required."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Profile updated\",\n  \"data\": {\n    \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"fullName\": \"Alice J. Smith\",\n    \"phone\": \"+9876543210\",\n    \"email\": \"admin@example.com\",\n    \"status\": \"ACTIVE\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Change My Password",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"OldPass1!\",\n  \"newPassword\": \"NewPass2!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/me/password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "me", "password"]
+            },
+            "description": "Change own password. Requires the current password for verification. Returns 400 if currentPassword is incorrect."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Password changed successfully\"\n}"
+            },
+            {
+              "name": "400 Wrong current password",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"message\": \"Current password is incorrect\",\n  \"status_code\": 400\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin Users",
+      "description": "CRUD for admin panel accounts. All endpoints require the `admin_users` permission resource.",
+      "item": [
+        {
+          "name": "List Admin Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.users && json.data.users.length > 0) {",
+                  "    pm.collectionVariables.set('userId', json.data.users[0].id);",
+                  "    console.log('userId saved:', json.data.users[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users?page=1&limit=20&sortBy=createdAt&sortOrder=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users"],
+              "query": [
+                { "key": "page",       "value": "1",          "description": "Page number" },
+                { "key": "limit",      "value": "20",         "description": "Items per page (max 100)" },
+                { "key": "search",     "value": "",           "description": "Search by email, fullName, phone", "disabled": true },
+                { "key": "roleId",     "value": "",           "description": "Filter by role UUID", "disabled": true },
+                { "key": "status",     "value": "ACTIVE",     "description": "ACTIVE | INACTIVE | SUSPENDED", "disabled": true },
+                { "key": "sortBy",     "value": "createdAt",  "description": "createdAt | updatedAt | email | fullName | status" },
+                { "key": "sortOrder",  "value": "desc",       "description": "asc | desc" }
+              ]
+            },
+            "description": "List all non-deleted admin users. Supports pagination, search, filter by status/role, and sorting. The test script saves the first user's id to `userId`."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Admin users retrieved\",\n  \"data\": {\n    \"users\": [\n      {\n        \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n        \"fullName\": \"Alice Smith\",\n        \"email\": \"alice@example.com\",\n        \"phone\": \"+1234567890\",\n        \"avatarUrl\": null,\n        \"status\": \"ACTIVE\",\n        \"isActive\": true,\n        \"isSuperAdmin\": false,\n        \"lastLoginAt\": \"2026-03-15T10:00:00Z\",\n        \"roleId\": \"660e8400-e29b-41d4-a716-446655440001\",\n        \"role\": { \"id\": \"660e8400-e29b-41d4-a716-446655440001\", \"name\": \"Super Admin\", \"isActive\": true, \"isSuper\": true },\n        \"createdAt\": \"2026-01-01T00:00:00Z\",\n        \"updatedAt\": \"2026-03-15T10:00:00Z\",\n        \"deletedAt\": null\n      }\n    ],\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create Admin User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.id) {",
+                  "    pm.collectionVariables.set('userId', json.data.id);",
+                  "    console.log('userId saved (created):', json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"bob@example.com\",\n  \"password\": \"SecurePass1!\",\n  \"fullName\": \"Bob Jones\",\n  \"phone\": \"+9876543210\",\n  \"avatarUrl\": null,\n  \"roleId\": \"{{roleId}}\",\n  \"isSuperAdmin\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users"]
+            },
+            "description": "Create a new admin user. `email` and `password` are required. `roleId` must reference an existing AdminRole. The test script saves the new user's id to `userId`.\n\nRequired permission: `admin_users.create`"
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"message\": \"Admin user created\",\n  \"data\": {\n    \"id\": \"770e8400-e29b-41d4-a716-446655440002\",\n    \"fullName\": \"Bob Jones\",\n    \"email\": \"bob@example.com\",\n    \"phone\": \"+9876543210\",\n    \"avatarUrl\": null,\n    \"status\": \"ACTIVE\",\n    \"isActive\": true,\n    \"isSuperAdmin\": false,\n    \"lastLoginAt\": null,\n    \"roleId\": \"660e8400-e29b-41d4-a716-446655440001\",\n    \"role\": { \"id\": \"660e8400-e29b-41d4-a716-446655440001\", \"name\": \"Super Admin\", \"isActive\": true, \"isSuper\": true },\n    \"createdAt\": \"2026-03-15T10:30:00Z\",\n    \"updatedAt\": \"2026-03-15T10:30:00Z\",\n    \"deletedAt\": null\n  }\n}"
+            },
+            {
+              "name": "409 Email in use",
+              "status": "Conflict",
+              "code": 409,
+              "body": "{\n  \"message\": \"Email already in use\",\n  \"status_code\": 409\n}"
+            },
+            {
+              "name": "404 Role not found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"message\": \"Role not found\",\n  \"status_code\": 404\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Admin User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{userId}}"]
+            },
+            "description": "Get a single admin user by UUID. Returns 404 if not found or soft-deleted.\n\nRequired permission: `admin_users.read`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Admin user retrieved\",\n  \"data\": {\n    \"id\": \"770e8400-e29b-41d4-a716-446655440002\",\n    \"fullName\": \"Bob Jones\",\n    \"email\": \"bob@example.com\",\n    \"phone\": \"+9876543210\",\n    \"avatarUrl\": null,\n    \"status\": \"ACTIVE\",\n    \"isActive\": true,\n    \"isSuperAdmin\": false,\n    \"lastLoginAt\": null,\n    \"roleId\": \"660e8400-e29b-41d4-a716-446655440001\",\n    \"role\": { \"id\": \"660e8400-e29b-41d4-a716-446655440001\", \"name\": \"Super Admin\", \"isActive\": true, \"isSuper\": true },\n    \"createdAt\": \"2026-03-15T10:30:00Z\",\n    \"updatedAt\": \"2026-03-15T10:30:00Z\",\n    \"deletedAt\": null\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"message\": \"Admin user not found\",\n  \"status_code\": 404\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Admin User",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Robert Jones\",\n  \"phone\": \"+1112223333\",\n  \"avatarUrl\": \"https://cdn.example.com/new.png\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{userId}}"]
+            },
+            "description": "Update profile fields (fullName, phone, avatarUrl). At least one field required. To change role use the Assign Role endpoint. To change status use Toggle Status.\n\nRequired permission: `admin_users.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Admin user updated\",\n  \"data\": {\n    \"id\": \"770e8400-e29b-41d4-a716-446655440002\",\n    \"fullName\": \"Robert Jones\",\n    \"phone\": \"+1112223333\",\n    \"email\": \"bob@example.com\",\n    \"status\": \"ACTIVE\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Reset Admin Password",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"ResetPass1!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{userId}}/password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{userId}}", "password"]
+            },
+            "description": "Reset another admin's password. Does NOT require the current password — the actor's RBAC permission is the gate. For changing your own password use PATCH /api/admin/me/password.\n\nRequired permission: `admin_users.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Password reset successfully\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Assign Role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleId\": \"{{roleId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{userId}}/roles",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{userId}}", "roles"]
+            },
+            "description": "Assign or remove a role from an admin user. Pass `null` as `roleId` to remove the role without assigning a new one.\n\nRequired permission: `admin_users.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK — role assigned",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Role assigned\",\n  \"data\": {\n    \"id\": \"770e8400-e29b-41d4-a716-446655440002\",\n    \"roleId\": \"660e8400-e29b-41d4-a716-446655440001\",\n    \"role\": { \"id\": \"660e8400-e29b-41d4-a716-446655440001\", \"name\": \"Super Admin\" }\n  }\n}"
+            },
+            {
+              "name": "200 OK — role removed",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Role assigned\",\n  \"data\": {\n    \"id\": \"770e8400-e29b-41d4-a716-446655440002\",\n    \"roleId\": null,\n    \"role\": null\n  }\n}"
+            },
+            {
+              "name": "404 Role not found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"message\": \"Role not found\",\n  \"status_code\": 404\n}"
+            }
+          ]
+        },
+        {
+          "name": "Toggle Status — Suspend",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"SUSPENDED\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{userId}}/toggle-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{userId}}", "toggle-status"]
+            },
+            "description": "Change account status. Valid values: `ACTIVE`, `INACTIVE`, `SUSPENDED`.\n\n- Cannot change your own status\n- Cannot deactivate the last super admin\n\n`isActive` is automatically synced: ACTIVE → true, INACTIVE/SUSPENDED → false.\n\nRequired permission: `admin_users.update`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Status updated\",\n  \"data\": {\n    \"id\": \"770e8400-e29b-41d4-a716-446655440002\",\n    \"status\": \"SUSPENDED\",\n    \"isActive\": false\n  }\n}"
+            },
+            {
+              "name": "400 Cannot change own status",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"message\": \"Cannot change your own status\",\n  \"status_code\": 400\n}"
+            },
+            {
+              "name": "400 Last super admin",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"message\": \"Cannot deactivate the last super admin\",\n  \"status_code\": 400\n}"
+            }
+          ]
+        },
+        {
+          "name": "Toggle Status — Activate",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{userId}}/toggle-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{userId}}", "toggle-status"]
+            },
+            "description": "Re-activate a previously suspended or inactive admin account."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Status updated\",\n  \"data\": {\n    \"id\": \"770e8400-e29b-41d4-a716-446655440002\",\n    \"status\": \"ACTIVE\",\n    \"isActive\": true\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete Admin User (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{userId}}"]
+            },
+            "description": "Soft-delete an admin user. Sets `deletedAt`, marks account INACTIVE. The record is permanently excluded from all list/get queries. This cannot be undone via the API.\n\n- Cannot delete yourself\n- Cannot delete the last super admin\n\nRequired permission: `admin_users.delete`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Admin user deleted\"\n}"
+            },
+            {
+              "name": "400 Cannot delete yourself",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"message\": \"Cannot delete yourself\",\n  \"status_code\": 400\n}"
+            },
+            {
+              "name": "400 Last super admin",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"message\": \"Cannot delete the last super admin\",\n  \"status_code\": 400\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Audit Logs",
+      "description": "View the action history of an admin user.",
+      "item": [
+        {
+          "name": "Get User Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{userId}}/audit-logs?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{userId}}", "audit-logs"],
+              "query": [
+                { "key": "page",  "value": "1",  "description": "Page number" },
+                { "key": "limit", "value": "20", "description": "Items per page (max 100)" }
+              ]
+            },
+            "description": "Paginated audit log of all actions **performed by** this admin user.\n\nRequired permission: `audit_logs.read`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Audit logs retrieved\",\n  \"data\": {\n    \"logs\": [\n      {\n        \"id\": \"880e8400-e29b-41d4-a716-446655440003\",\n        \"actorAdminId\": \"550e8400-e29b-41d4-a716-446655440000\",\n        \"action\": \"ADMIN_USER_CREATE\",\n        \"entityType\": \"AdminUser\",\n        \"entityId\": \"770e8400-e29b-41d4-a716-446655440002\",\n        \"meta\": { \"email\": \"bob@example.com\", \"fullName\": \"Bob Jones\", \"roleId\": \"660e8400-e29b-41d4-a716-446655440001\" },\n        \"ip\": \"192.168.1.1\",\n        \"userAgent\": \"PostmanRuntime/7.36.0\",\n        \"createdAt\": \"2026-03-15T10:30:00Z\"\n      },\n      {\n        \"id\": \"990e8400-e29b-41d4-a716-446655440004\",\n        \"actorAdminId\": \"550e8400-e29b-41d4-a716-446655440000\",\n        \"action\": \"ADMIN_USER_STATUS_CHANGE\",\n        \"entityType\": \"AdminUser\",\n        \"entityId\": \"770e8400-e29b-41d4-a716-446655440002\",\n        \"meta\": { \"before\": { \"status\": \"ACTIVE\" }, \"after\": { \"status\": \"SUSPENDED\" } },\n        \"ip\": \"192.168.1.1\",\n        \"userAgent\": \"PostmanRuntime/7.36.0\",\n        \"createdAt\": \"2026-03-15T11:00:00Z\"\n      }\n    ],\n    \"total\": 2,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

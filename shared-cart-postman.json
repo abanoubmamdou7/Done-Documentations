@@ -1,0 +1,257 @@
+{
+  "info": {
+    "name": "Shared Cart & Shopping Session APIs",
+    "description": "DoneBuddy Shared Cart - Group shopping sessions, shared cart management, and cart routing.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "authorization",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{token}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "token", "value": "your-jwt-token" },
+    { "key": "conversationId", "value": "1" },
+    { "key": "sessionId", "value": "1" },
+    { "key": "itemId", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "Helper",
+      "item": [
+        {
+          "name": "Get First Seller",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sellers/first",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sellers", "first"]
+            },
+            "description": "Returns the first active seller ID. Optional - start session auto-resolves when sellerId omitted."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Session Lifecycle",
+      "item": [
+        {
+          "name": "Start Shopping Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": \"{{conversationId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/shopping-sessions/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "shopping-sessions", "start"]
+            },
+            "description": "Start session. sellerId optional (omit for single-seller). Add \"sellerId\": \"1\" for multi-seller."
+          }
+        },
+        {
+          "name": "Get Active Session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shopping-sessions/conversation/{{conversationId}}/active",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "shopping-sessions", "conversation", "{{conversationId}}", "active"]
+            },
+            "description": "Get active shopping session for a conversation (if any)."
+          }
+        },
+        {
+          "name": "Join Shopping Session",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shopping-sessions/{{sessionId}}/join",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "shopping-sessions", "{{sessionId}}", "join"]
+            },
+            "description": "Join an active session. For users who join conversation after session started."
+          }
+        },
+        {
+          "name": "End Shopping Session",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shopping-sessions/{{sessionId}}/end",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "shopping-sessions", "{{sessionId}}", "end"]
+            },
+            "description": "End session and copy all items to each participant's personal cart. Idempotent."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Session Cart",
+      "item": [
+        {
+          "name": "Get Session Cart",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shopping-sessions/{{sessionId}}/cart",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "shopping-sessions", "{{sessionId}}", "cart"]
+            },
+            "description": "Get shared cart with items, addedBy, likesCount, isLiked."
+          }
+        },
+        {
+          "name": "Add Item to Session Cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shopifyVariantId\": \"47583440404735\",\n  \"quantity\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/shopping-sessions/{{sessionId}}/cart/items",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "shopping-sessions", "{{sessionId}}", "cart", "items"]
+            },
+            "description": "Add product variant to shared cart. Same variant increments quantity."
+          }
+        },
+        {
+          "name": "Update Session Cart Item",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 3\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/shopping-sessions/{{sessionId}}/cart/items/{{itemId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "shopping-sessions", "{{sessionId}}", "cart", "items", "{{itemId}}"]
+            },
+            "description": "Update quantity. quantity<=0 removes item."
+          }
+        },
+        {
+          "name": "Remove Session Cart Item",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shopping-sessions/{{sessionId}}/cart/items/{{itemId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "shopping-sessions", "{{sessionId}}", "cart", "items", "{{itemId}}"]
+            },
+            "description": "Remove item from shared cart."
+          }
+        },
+        {
+          "name": "Toggle Item Like",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shopping-sessions/{{sessionId}}/cart/items/{{itemId}}/like",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "shopping-sessions", "{{sessionId}}", "cart", "items", "{{itemId}}", "like"]
+            },
+            "description": "Toggle LIKE on session cart item."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cart Routing",
+      "item": [
+        {
+          "name": "Add to Cart (Personal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shopifyVariantId\": \"47583440404735\",\n  \"quantity\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cart/items",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cart", "items"]
+            },
+            "description": "Add to personal cart (no conversationId)."
+          }
+        },
+        {
+          "name": "Add to Cart (Shared - when session active)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shopifyVariantId\": \"47583440404735\",\n  \"quantity\": 2,\n  \"conversationId\": \"{{conversationId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cart/items",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cart", "items"]
+            },
+            "description": "Add to shared cart when conversationId + active session. Routes to shared cart."
+          }
+        }
+      ]
+    }
+  ]
+}
